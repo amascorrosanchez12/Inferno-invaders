@@ -1,0 +1,810 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Inferno Invaders</title>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+    body {
+      margin: 0;
+      background: #050000;
+      font-family: "Trebuchet MS", system-ui, sans-serif;
+      display: grid;
+      place-items: center;
+      min-height: 100vh;
+    }
+    .wrap {
+      display: grid;
+      gap: 12px;
+      text-align: center;
+      color: #f7d6d6;
+    }
+    .title {
+      font-size: 28px;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: #ff7b7b;
+      text-shadow: 0 0 12px rgba(255, 80, 80, 0.8);
+    }
+    .subtitle {
+      font-size: 12px;
+      letter-spacing: 0.15em;
+      opacity: 0.7;
+    }
+    canvas {
+      background: #0b0000;
+      border: 2px solid #591313;
+      box-shadow: 0 0 25px rgba(255, 80, 80, 0.4);
+      image-rendering: pixelated;
+    }
+    .hud {
+      font-size: 14px;
+      letter-spacing: 0.04em;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="title">Inferno Invaders</div>
+    <div class="subtitle">Space to shoot • A/D or ←/→ to move • R restart</div>
+    <canvas id="game" width="720" height="540" aria-label="Inferno Invaders"></canvas>
+    <div class="hud">Mover: ⬅️ ➡️ · Disparar: Espacio · Pausa: P · Mute: M · High Score: H · Reiniciar: R</div>
+  </div>
+  <script>
+    // ============================
+    // Inferno Invaders (Canvas)
+    // ============================
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+
+    const state = {
+      running: true,
+      gameOver: false,
+      score: 0,
+      highScore: 0,
+      highScoreNoticeTime: 0,
+      lives: 3,
+      level: 1,
+      paused: false,
+      shakeTime: 0,
+      backgroundPulse: 0,
+      lastTime: 0,
+      enemyShots: [],
+      playerShots: [],
+      powerUps: [], // Falling bonuses dropped by invaders
+      particles: [], // Small embers for feedback
+      powerTimers: {
+        rapid: 0,
+        shield: 0,
+        spread: 0,
+      },
+    };
+
+    const keys = {
+      left: false,
+      right: false,
+      shoot: false,
+    };
+
+    const player = {
+      x: canvas.width / 2,
+      y: canvas.height - 60,
+      radius: 18,
+      speed: 260,
+      cooldown: 0,
+    };
+
+    const invaderGrid = {
+      rows: 4,
+      cols: 8,
+      spacingX: 64,
+      spacingY: 52,
+      offsetX: 80,
+      offsetY: 70,
+      direction: 1,
+      speed: 32,
+      drop: 18,
+      invaders: [],
+    };
+
+    // Audio context for simple beeps (no external assets)
+    const audio = {
+      ctx: null,
+      masterGain: null,
+      enabled: true,
+      muted: false,
+      musicEnabled: true,
+      musicPlaying: false,
+      musicStarted: false,
+      musicTimer: null,
+      musicVoices: [],
+      nextNoteTime: 0,
+      lookahead: 0.1,
+      schedulerInterval: 25,
+      musicVolume: 0.12,
+      musicGain: null,
+      sfxGain: null,
+      baseMusicVolume: 0.035,
+    };
+
+    // Persistent high score storage.
+    const HIGH_SCORE_KEY = "infernoInvadersHighScore";
+
+    function loadHighScore() {
+      const stored = Number(localStorage.getItem(HIGH_SCORE_KEY));
+      state.highScore = Number.isFinite(stored) ? stored : 0;
+    }
+
+    function saveHighScore() {
+      localStorage.setItem(HIGH_SCORE_KEY, String(state.highScore));
+    }
+
+    function initAudio() {
+      if (!audio.ctx) {
+        audio.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        audio.masterGain = audio.ctx.createGain();
+        audio.musicGain = audio.ctx.createGain();
+        audio.sfxGain = audio.ctx.createGain();
+        audio.masterGain.gain.value = 1;
+        audio.musicGain.gain.value = audio.musicEnabled ? audio.musicVolume : 0;
+        audio.sfxGain.gain.value = 0.1;
+        audio.musicGain.connect(audio.masterGain);
+        audio.sfxGain.connect(audio.masterGain);
+        audio.masterGain.connect(audio.ctx.destination);
+      }
+    }
+
+    function beep(frequency, duration, type = "sine", volume = 0.05) {
+      if (!audio.enabled || audio.muted) return;
+      initAudio();
+      const now = audio.ctx.currentTime;
+      const oscillator = audio.ctx.createOscillator();
+      const gain = audio.ctx.createGain();
+      oscillator.type = type;
+      oscillator.frequency.value = frequency;
+      gain.gain.value = volume;
+      oscillator.connect(gain).connect(audio.sfxGain);
+      oscillator.start(now);
+      oscillator.stop(now + duration);
+      // Duck music briefly when SFX plays
+      if (audio.musicGain && !audio.muted) {
+        audio.musicGain.gain.cancelScheduledValues(now);
+        audio.musicGain.gain.setTargetAtTime(audio.musicVolume * 0.5, now, 0.02);
+        audio.musicGain.gain.setTargetAtTime(audio.musicEnabled ? audio.musicVolume : 0, now + duration, 0.15);
+      }
+    }
+
+    function scheduleMusic(time) {
+      // Procedural notes scheduled slightly ahead for stable timing.
+      const tempo = 80 + state.level * 6;
+      const beatDuration = 60 / tempo;
+      const notes = [110, 165, 196, 220, 196, 165];
+      const tone = notes[Math.floor(Math.random() * notes.length)];
+      const bass = audio.musicVoices[0];
+      const pad = audio.musicVoices[1];
+      if (bass && pad) {
+        bass.osc.frequency.setValueAtTime(tone, time);
+        bass.gain.gain.setValueAtTime(0.08, time);
+        bass.gain.gain.exponentialRampToValueAtTime(0.001, time + beatDuration * 0.95);
+        pad.osc.frequency.setValueAtTime(tone * 2, time);
+        pad.gain.gain.setValueAtTime(0.04, time);
+        pad.gain.gain.exponentialRampToValueAtTime(0.001, time + beatDuration * 0.9);
+      }
+      audio.nextNoteTime += beatDuration;
+    }
+
+    function startMusicOnce() {
+      if (audio.musicPlaying) return;
+      initAudio();
+      audio.musicPlaying = true;
+      // Create two continuous oscillators (voices) and schedule their envelopes.
+      const bassOsc = audio.ctx.createOscillator();
+      const bassGain = audio.ctx.createGain();
+      bassOsc.type = "sine";
+      bassGain.gain.value = 0.001;
+      bassOsc.connect(bassGain).connect(audio.musicGain);
+      bassOsc.start();
+
+      const padOsc = audio.ctx.createOscillator();
+      const padGain = audio.ctx.createGain();
+      padOsc.type = "triangle";
+      padGain.gain.value = 0.001;
+      padOsc.connect(padGain).connect(audio.musicGain);
+      padOsc.start();
+
+      audio.musicVoices = [
+        { osc: bassOsc, gain: bassGain },
+        { osc: padOsc, gain: padGain },
+      ];
+      audio.nextNoteTime = audio.ctx.currentTime + 0.05;
+
+      const scheduler = () => {
+        if (!audio.musicPlaying) return;
+        while (audio.nextNoteTime < audio.ctx.currentTime + audio.lookahead) {
+          scheduleMusic(audio.nextNoteTime);
+        }
+      };
+      audio.musicTimer = setInterval(scheduler, audio.schedulerInterval);
+    }
+
+    function stopMusic() {
+      audio.musicPlaying = false;
+      if (audio.musicTimer) {
+        clearInterval(audio.musicTimer);
+        audio.musicTimer = null;
+      }
+    }
+
+    function toggleMusic() {
+      audio.musicEnabled = !audio.musicEnabled;
+      if (audio.musicGain) {
+        audio.musicGain.gain.value = audio.musicEnabled ? audio.musicVolume : 0;
+      }
+    }
+
+    function toggleMute() {
+      audio.muted = !audio.muted;
+      if (audio.masterGain) {
+        audio.masterGain.gain.value = audio.muted ? 0 : 1;
+      }
+    }
+
+    function handleFirstInteraction() {
+      // Initialize/resume AudioContext and start music once after user input.
+      initAudio();
+      if (audio.ctx && audio.ctx.state === "suspended") {
+        audio.ctx.resume();
+      }
+      if (!audio.musicStarted) {
+        audio.musicStarted = true;
+        startMusicOnce();
+      }
+    }
+
+    function resetGrid() {
+      invaderGrid.invaders = [];
+      for (let row = 0; row < invaderGrid.rows; row++) {
+        for (let col = 0; col < invaderGrid.cols; col++) {
+          invaderGrid.invaders.push({
+            x: invaderGrid.offsetX + col * invaderGrid.spacingX,
+            y: invaderGrid.offsetY + row * invaderGrid.spacingY,
+            alive: true,
+          });
+        }
+      }
+    }
+
+    function resetGame() {
+      state.running = true;
+      state.gameOver = false;
+      state.paused = false;
+      state.score = 0;
+      state.highScoreNoticeTime = 0;
+      state.lives = 3;
+      state.level = 1;
+      state.enemyShots = [];
+      state.playerShots = [];
+      state.powerUps = [];
+      state.particles = [];
+      state.powerTimers.rapid = 0;
+      state.powerTimers.shield = 0;
+      state.powerTimers.spread = 0;
+      player.x = canvas.width / 2;
+      player.cooldown = 0;
+      invaderGrid.speed = 32;
+      invaderGrid.direction = 1;
+      resetGrid();
+    }
+
+    resetGame();
+    loadHighScore();
+
+    function spawnPlayerShot() {
+      const speed = 380;
+      const spreadActive = state.powerTimers.spread > 0;
+      const shots = spreadActive ? [-0.35, 0, 0.35] : [0];
+      shots.forEach((angle) => {
+        state.playerShots.push({
+          x: player.x,
+          y: player.y - player.radius,
+          radius: 4,
+          vx: Math.sin(angle) * speed,
+          vy: -Math.cos(angle) * speed,
+        });
+      });
+      beep(520, 0.08, "square", 0.04);
+    }
+
+    function spawnEnemyShot(origin) {
+      state.enemyShots.push({
+        x: origin.x,
+        y: origin.y + 16,
+        radius: 5,
+        vx: 0,
+        vy: 180 + state.level * 10,
+      });
+      beep(220, 0.08, "sawtooth", 0.03);
+    }
+
+    function updateInvaders(dt) {
+      const step = invaderGrid.speed * invaderGrid.direction * dt;
+      let hitEdge = false;
+
+      invaderGrid.invaders.forEach((invader) => {
+        if (!invader.alive) return;
+        invader.x += step;
+        if (invader.x > canvas.width - invaderGrid.offsetX || invader.x < invaderGrid.offsetX) {
+          hitEdge = true;
+        }
+      });
+
+      if (hitEdge) {
+        invaderGrid.direction *= -1;
+        invaderGrid.invaders.forEach((invader) => {
+          if (!invader.alive) return;
+          invader.y += invaderGrid.drop;
+        });
+      }
+
+      // Random enemy shooting (scaled by level)
+      if (Math.random() < 0.012 + state.level * 0.003) {
+        const alive = invaderGrid.invaders.filter((invader) => invader.alive);
+        if (alive.length) {
+          spawnEnemyShot(alive[Math.floor(Math.random() * alive.length)]);
+        }
+      }
+    }
+
+    function checkInvaderGroundCollision() {
+      const groundLine = canvas.height - 20;
+      const invaderHeight = 32;
+      const breached = invaderGrid.invaders.some(
+        (invader) => invader.alive && invader.y + invaderHeight >= groundLine
+      );
+      if (breached) {
+        state.gameOver = true;
+        state.running = false;
+        state.enemyShots = [];
+      }
+    }
+
+    function updateShots(dt) {
+      state.playerShots.forEach((shot) => {
+        shot.x += shot.vx * dt;
+        shot.y += shot.vy * dt;
+      });
+      state.enemyShots.forEach((shot) => {
+        shot.x += shot.vx * dt;
+        shot.y += shot.vy * dt;
+      });
+
+      state.playerShots = state.playerShots.filter((shot) => shot.y > -20);
+      state.enemyShots = state.enemyShots.filter((shot) => shot.y < canvas.height + 20);
+    }
+
+    function spawnPowerUp(x, y) {
+      const roll = Math.random();
+      if (roll > 0.2) return;
+      const types = ["rapid", "shield", "spread"];
+      const type = types[Math.floor(Math.random() * types.length)];
+      state.powerUps.push({
+        x,
+        y,
+        radius: 10,
+        speed: 90,
+        type,
+      });
+    }
+
+    function spawnParticles(x, y, color = "#f26b6b", count = 10) {
+      for (let i = 0; i < count; i++) {
+        state.particles.push({
+          x,
+          y,
+          vx: (Math.random() - 0.5) * 120,
+          vy: (Math.random() - 0.5) * 120,
+          life: 0.6 + Math.random() * 0.4,
+          color,
+        });
+      }
+    }
+
+    function circleHit(a, b) {
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      return Math.hypot(dx, dy) < a.radius + b.radius;
+    }
+
+    function handleCollisions() {
+      // Player shots vs invaders
+      state.playerShots.forEach((shot) => {
+        invaderGrid.invaders.forEach((invader) => {
+          if (!invader.alive) return;
+          const target = { x: invader.x, y: invader.y, radius: 16 };
+          if (circleHit(shot, target)) {
+            invader.alive = false;
+            shot.y = -100;
+            state.score += 50;
+            spawnPowerUp(invader.x, invader.y);
+            spawnParticles(invader.x, invader.y, "#f5b15f");
+            beep(740, 0.06, "triangle", 0.04);
+          }
+        });
+      });
+
+      // Enemy shots vs player
+      state.enemyShots.forEach((shot) => {
+        if (circleHit(shot, player)) {
+          shot.y = canvas.height + 50;
+          if (state.powerTimers.shield > 0) {
+            state.powerTimers.shield = 0;
+            spawnParticles(player.x, player.y, "#6de2ff", 18);
+            beep(320, 0.12, "triangle", 0.06);
+          } else {
+            state.lives -= 1;
+            state.shakeTime = 0.25;
+            spawnParticles(player.x, player.y, "#ff6868", 16);
+            beep(120, 0.15, "sawtooth", 0.08);
+            if (state.lives <= 0) {
+              state.running = false;
+            }
+          }
+        }
+      });
+    }
+
+    function updatePowerUps(dt) {
+      state.powerUps.forEach((power) => {
+        power.y += power.speed * dt;
+        if (circleHit(power, player)) {
+          if (power.type === "rapid") {
+            state.powerTimers.rapid = 6;
+          }
+          if (power.type === "shield") {
+            state.powerTimers.shield = 8;
+          }
+          if (power.type === "spread") {
+            state.powerTimers.spread = 7;
+          }
+          beep(660, 0.1, "triangle", 0.05);
+          spawnParticles(power.x, power.y, "#fff2a1", 12);
+          power.y = canvas.height + 40;
+        }
+      });
+      state.powerUps = state.powerUps.filter((power) => power.y < canvas.height + 20);
+    }
+
+    function updateParticles(dt) {
+      state.particles.forEach((particle) => {
+        particle.life -= dt;
+        particle.x += particle.vx * dt;
+        particle.y += particle.vy * dt;
+      });
+      state.particles = state.particles.filter((particle) => particle.life > 0);
+    }
+
+    function advanceLevelIfNeeded() {
+      const remaining = invaderGrid.invaders.some((invader) => invader.alive);
+      if (!remaining) {
+        state.level += 1;
+        state.score += 200;
+        invaderGrid.speed += 8;
+        invaderGrid.direction = 1;
+        resetGrid();
+        beep(880, 0.12, "triangle", 0.06);
+      }
+    }
+
+    function updatePlayer(dt) {
+      if (keys.left) player.x -= player.speed * dt;
+      if (keys.right) player.x += player.speed * dt;
+      player.x = Math.max(player.radius + 10, Math.min(canvas.width - player.radius - 10, player.x));
+
+      if (player.cooldown > 0) {
+        player.cooldown -= dt;
+      }
+
+      if (keys.shoot && player.cooldown <= 0 && state.running) {
+        spawnPlayerShot();
+        player.cooldown = state.powerTimers.rapid > 0 ? 0.12 : 0.28;
+      }
+    }
+
+    function updatePowerTimers(dt) {
+      Object.keys(state.powerTimers).forEach((key) => {
+        if (state.powerTimers[key] > 0) {
+          state.powerTimers[key] = Math.max(0, state.powerTimers[key] - dt);
+        }
+      });
+    }
+
+    function updateHighScore(dt) {
+      if (state.score > state.highScore) {
+        state.highScore = state.score;
+        saveHighScore();
+      }
+      if (state.highScoreNoticeTime > 0) {
+        state.highScoreNoticeTime = Math.max(0, state.highScoreNoticeTime - dt);
+      }
+    }
+
+    function drawBackground(dt) {
+      state.backgroundPulse += dt * 1.4;
+      const glow = 0.12 + Math.sin(state.backgroundPulse) * 0.05;
+      const gradient = ctx.createRadialGradient(
+        canvas.width / 2,
+        canvas.height / 2,
+        40,
+        canvas.width / 2,
+        canvas.height / 2,
+        canvas.width / 1.2
+      );
+      gradient.addColorStop(0, `rgba(130, 10, 10, ${glow + 0.08})`);
+      gradient.addColorStop(1, "rgba(0, 0, 0, 0.9)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Subtle flicker overlay
+      ctx.fillStyle = `rgba(255, 60, 60, ${0.04 + Math.random() * 0.03})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function drawPlayer() {
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      ctx.fillStyle = "#f24848";
+      ctx.beginPath();
+      ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (state.powerTimers.shield > 0) {
+        ctx.strokeStyle = "rgba(109, 226, 255, 0.8)";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, player.radius + 6, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = "#ffd1d1";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, player.radius - 6, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = "#320000";
+      ctx.beginPath();
+      ctx.arc(-5, -4, 3, 0, Math.PI * 2);
+      ctx.arc(6, -4, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawInvader(invader) {
+      ctx.save();
+      ctx.translate(invader.x, invader.y);
+      ctx.fillStyle = "#e9d1d1";
+      ctx.beginPath();
+      ctx.arc(0, 0, 16, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#4b0000";
+      ctx.beginPath();
+      ctx.arc(-5, -2, 3, 0, Math.PI * 2);
+      ctx.arc(6, -2, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "#4b0000";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-6, 6);
+      ctx.lineTo(6, 6);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function drawShots() {
+      ctx.fillStyle = "#f9a23a";
+      state.playerShots.forEach((shot) => {
+        ctx.beginPath();
+        ctx.arc(shot.x, shot.y, shot.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      ctx.fillStyle = "#6de2ff";
+      state.enemyShots.forEach((shot) => {
+        ctx.beginPath();
+        ctx.arc(shot.x, shot.y, shot.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    function drawPowerUps() {
+      state.powerUps.forEach((power) => {
+        ctx.save();
+        ctx.translate(power.x, power.y);
+        ctx.strokeStyle = "#fff2a1";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, power.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = "#ff9f43";
+        ctx.font = "12px Trebuchet MS";
+        const label = power.type === "rapid" ? "R" : power.type === "shield" ? "S" : "X";
+        ctx.fillText(label, -4, 4);
+        ctx.restore();
+      });
+    }
+
+    function drawParticles() {
+      state.particles.forEach((particle) => {
+        ctx.fillStyle = particle.color;
+        ctx.globalAlpha = Math.max(0, particle.life);
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+    }
+
+    function drawHUD() {
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.font = "16px Trebuchet MS";
+      ctx.fillText(`Score: ${state.score}`, 18, 24);
+      ctx.fillText(`High: ${state.highScore}`, 18, 44);
+      ctx.fillText(`Lives: ${state.lives}`, 18, 64);
+      ctx.fillText(`Level: ${state.level}`, canvas.width - 110, 24);
+      ctx.fillText(`Music: ${audio.musicEnabled ? "ON" : "OFF"}`, canvas.width - 170, 44);
+      const audioState = audio.ctx ? audio.ctx.state : "suspended";
+      ctx.fillText(`AUDIO: ${audioState === "running" ? "OK" : "LOCKED"}`, canvas.width - 170, 64);
+
+      ctx.fillStyle = "rgba(255,255,255,0.75)";
+      const timers = state.powerTimers;
+      ctx.fillText(`Rapid: ${timers.rapid.toFixed(1)}s`, 18, 84);
+      ctx.fillText(`Shield: ${timers.shield.toFixed(1)}s`, 18, 102);
+      ctx.fillText(`Spread: ${timers.spread.toFixed(1)}s`, 18, 120);
+      if (state.highScoreNoticeTime > 0) {
+        ctx.fillStyle = "rgba(255,255,255,0.75)";
+        ctx.fillText("High score reset", 18, 140);
+      }
+
+      ctx.fillStyle = "rgba(255,255,255,0.7)";
+      if (state.paused) {
+        ctx.fillText("PAUSA", canvas.width - 90, 82);
+      }
+      if (audio.muted) {
+        ctx.fillText("MUTE", canvas.width - 90, 100);
+      }
+
+      if (!state.running) {
+        ctx.fillStyle = "rgba(0,0,0,0.6)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#ffd8d8";
+        ctx.font = "bold 36px Trebuchet MS";
+        ctx.fillText("GAME OVER", canvas.width / 2 - 120, canvas.height / 2);
+        ctx.font = "16px Trebuchet MS";
+        if (state.gameOver) {
+          ctx.fillText(
+            "Invasores llegaron al fondo",
+            canvas.width / 2 - 130,
+            canvas.height / 2 + 22
+          );
+          ctx.fillText(
+            `High Score: ${state.highScore}`,
+            canvas.width / 2 - 80,
+            canvas.height / 2 + 42
+          );
+          ctx.fillText("Pulsa R para reiniciar", canvas.width / 2 - 95, canvas.height / 2 + 45);
+        } else {
+          ctx.fillText(
+            `High Score: ${state.highScore}`,
+            canvas.width / 2 - 80,
+            canvas.height / 2 + 20
+          );
+          ctx.fillText("Pulsa R para reiniciar", canvas.width / 2 - 95, canvas.height / 2 + 30);
+        }
+      }
+    }
+
+    function drawPauseOverlay() {
+      if (!state.paused || !state.running) return;
+      ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#ffd8d8";
+      ctx.font = "bold 36px Trebuchet MS";
+      ctx.fillText("PAUSA", canvas.width / 2 - 70, canvas.height / 2);
+      ctx.font = "16px Trebuchet MS";
+      ctx.fillText("Pulsa P para continuar", canvas.width / 2 - 100, canvas.height / 2 + 28);
+    }
+
+    function applyScreenShake(dt) {
+      if (state.shakeTime > 0) {
+        state.shakeTime -= dt;
+        const intensity = 6 * (state.shakeTime / 0.25);
+        const offsetX = (Math.random() - 0.5) * intensity;
+        const offsetY = (Math.random() - 0.5) * intensity;
+        ctx.translate(offsetX, offsetY);
+      }
+    }
+
+    function update(timestamp) {
+      const dt = Math.min((timestamp - state.lastTime) / 1000, 0.033);
+      state.lastTime = timestamp;
+
+      ctx.save();
+      drawBackground(dt);
+      if (!state.paused) {
+        applyScreenShake(dt);
+      }
+
+      if (state.running && !state.paused) {
+        updatePlayer(dt);
+        updateInvaders(dt);
+        checkInvaderGroundCollision();
+        updateShots(dt);
+        updatePowerUps(dt);
+        updateParticles(dt);
+        updatePowerTimers(dt);
+        updateHighScore(dt);
+        handleCollisions();
+        advanceLevelIfNeeded();
+      }
+
+      drawPlayer();
+      invaderGrid.invaders.forEach((invader) => invader.alive && drawInvader(invader));
+      drawShots();
+      drawPowerUps();
+      drawParticles();
+      drawHUD();
+      drawPauseOverlay();
+
+      ctx.restore();
+      requestAnimationFrame(update);
+    }
+
+    requestAnimationFrame(update);
+
+    // Create AudioContext early (still suspended until user interaction).
+    initAudio();
+
+    // First user input resumes AudioContext and starts music once.
+    window.addEventListener("keydown", handleFirstInteraction, { once: true });
+    window.addEventListener("click", handleFirstInteraction, { once: true });
+
+    window.addEventListener("keydown", (event) => {
+      if (event.code === "ArrowLeft") keys.left = true;
+      if (event.code === "ArrowRight") keys.right = true;
+      if (event.code === "Space") {
+        keys.shoot = true;
+        initAudio();
+      }
+      if (event.code === "KeyR") {
+        resetGame();
+      }
+      if (event.code === "KeyP") {
+        if (state.running) {
+          state.paused = !state.paused;
+        }
+      }
+      if (event.code === "KeyM") {
+        toggleMute();
+      }
+      if (event.code === "KeyH") {
+        state.highScore = 0;
+        saveHighScore();
+        state.highScoreNoticeTime = 1.5;
+      }
+    });
+
+    window.addEventListener("keyup", (event) => {
+      if (event.code === "ArrowLeft") keys.left = false;
+      if (event.code === "ArrowRight") keys.right = false;
+      if (event.code === "Space") keys.shoot = false;
+    });
+  </script>
+</body>
+</html>

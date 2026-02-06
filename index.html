@@ -203,6 +203,7 @@
       lives: 3,
       level: 1,
       paused: false,
+      debugOverlay: true,
       shakeTime: 0,
       backgroundPulse: 0,
       lastTime: 0,
@@ -832,9 +833,11 @@
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Subtle flicker overlay
-      ctx.fillStyle = `rgba(255, 60, 60, ${0.04 + Math.random() * 0.03})`;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Subtle flicker overlay (toggle with V for visibility debug).
+      if (state.debugOverlay) {
+        ctx.fillStyle = `rgba(255, 60, 60, ${0.04 + Math.random() * 0.03})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
     }
 
     function drawPlayer() {
@@ -870,8 +873,11 @@
     function drawInvader(invader) {
       ctx.save();
       ctx.translate(invader.x, invader.y);
-      // Draw invaders as a centered devil emoji; fallback to text if emoji fails.
+      // Force full opacity/shadows off for clear emoji rendering.
       ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = "transparent";
+      // Draw invaders as a centered devil emoji; fallback to text if emoji fails.
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.font = "24px system-ui, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\"";
@@ -1107,6 +1113,9 @@
         saveHighScore();
         state.highScoreNoticeTime = 1.5;
         refreshMenu();
+      }
+      if (event.code === "KeyV") {
+        state.debugOverlay = !state.debugOverlay;
       }
     });
 

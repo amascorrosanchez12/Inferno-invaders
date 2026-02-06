@@ -97,12 +97,18 @@
     // Audio context for simple beeps (no external assets)
     const audio = {
       ctx: null,
+      masterGain: null,
       enabled: true,
       muted: false,
       musicEnabled: true,
       musicPlaying: false,
       musicStarted: false,
       musicTimer: null,
+      musicVoices: [],
+      nextNoteTime: 0,
+      lookahead: 0.1,
+      schedulerInterval: 25,
+      musicVolume: 0.12,
       musicGain: null,
       sfxGain: null,
       baseMusicVolume: 0.035,
@@ -111,12 +117,15 @@
     function initAudio() {
       if (!audio.ctx) {
         audio.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        audio.masterGain = audio.ctx.createGain();
         audio.musicGain = audio.ctx.createGain();
         audio.sfxGain = audio.ctx.createGain();
-        audio.musicGain.gain.value = audio.baseMusicVolume;
+        audio.masterGain.gain.value = 1;
+        audio.musicGain.gain.value = audio.musicEnabled ? audio.musicVolume : 0;
         audio.sfxGain.gain.value = 0.1;
-        audio.musicGain.connect(audio.ctx.destination);
-        audio.sfxGain.connect(audio.ctx.destination);
+        audio.musicGain.connect(audio.masterGain);
+        audio.sfxGain.connect(audio.masterGain);
+        audio.masterGain.connect(audio.ctx.destination);
       }
     }
 
@@ -135,67 +144,83 @@
       // Duck music briefly when SFX plays
       if (audio.musicGain && !audio.muted) {
         audio.musicGain.gain.cancelScheduledValues(now);
-        audio.musicGain.gain.setTargetAtTime(audio.baseMusicVolume * 0.4, now, 0.02);
-        audio.musicGain.gain.setTargetAtTime(audio.baseMusicVolume, now + duration, 0.15);
+        audio.musicGain.gain.setTargetAtTime(audio.musicVolume * 0.5, now, 0.02);
+        audio.musicGain.gain.setTargetAtTime(audio.musicEnabled ? audio.musicVolume : 0, now + duration, 0.15);
       }
     }
 
-    function scheduleMusicBeat() {
-      if (!audio.musicEnabled || !audio.ctx) return;
-      const now = audio.ctx.currentTime;
+    function scheduleMusic(time) {
+      // Procedural notes scheduled slightly ahead for stable timing.
       const tempo = 80 + state.level * 6;
       const beatDuration = 60 / tempo;
       const notes = [110, 165, 196, 220, 196, 165];
       const tone = notes[Math.floor(Math.random() * notes.length)];
-      const osc = audio.ctx.createOscillator();
-      const gain = audio.ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(tone, now);
-      gain.gain.setValueAtTime(audio.baseMusicVolume, now);
-      gain.gain.exponentialRampToValueAtTime(audio.baseMusicVolume * 0.4, now + beatDuration * 0.9);
-      osc.connect(gain).connect(audio.musicGain);
-      osc.start(now);
-      osc.stop(now + beatDuration);
+      const bass = audio.musicVoices[0];
+      const pad = audio.musicVoices[1];
+      if (bass && pad) {
+        bass.osc.frequency.setValueAtTime(tone, time);
+        bass.gain.gain.setValueAtTime(0.08, time);
+        bass.gain.gain.exponentialRampToValueAtTime(0.001, time + beatDuration * 0.95);
+        pad.osc.frequency.setValueAtTime(tone * 2, time);
+        pad.gain.gain.setValueAtTime(0.04, time);
+        pad.gain.gain.exponentialRampToValueAtTime(0.001, time + beatDuration * 0.9);
+      }
+      audio.nextNoteTime += beatDuration;
     }
 
-    function startMusic() {
-      if (audio.musicPlaying || !audio.musicEnabled) return;
+    function startMusicOnce() {
+      if (audio.musicPlaying) return;
       initAudio();
       audio.musicPlaying = true;
-      const loop = () => {
+      // Create two continuous oscillators (voices) and schedule their envelopes.
+      const bassOsc = audio.ctx.createOscillator();
+      const bassGain = audio.ctx.createGain();
+      bassOsc.type = "sine";
+      bassGain.gain.value = 0.001;
+      bassOsc.connect(bassGain).connect(audio.musicGain);
+      bassOsc.start();
+
+      const padOsc = audio.ctx.createOscillator();
+      const padGain = audio.ctx.createGain();
+      padOsc.type = "triangle";
+      padGain.gain.value = 0.001;
+      padOsc.connect(padGain).connect(audio.musicGain);
+      padOsc.start();
+
+      audio.musicVoices = [
+        { osc: bassOsc, gain: bassGain },
+        { osc: padOsc, gain: padGain },
+      ];
+      audio.nextNoteTime = audio.ctx.currentTime + 0.05;
+
+      const scheduler = () => {
         if (!audio.musicPlaying) return;
-        const tempo = 80 + state.level * 6;
-        const beatDuration = 60 / tempo;
-        scheduleMusicBeat();
-        audio.musicTimer = setTimeout(loop, beatDuration * 1000);
+        while (audio.nextNoteTime < audio.ctx.currentTime + audio.lookahead) {
+          scheduleMusic(audio.nextNoteTime);
+        }
       };
-      loop();
+      audio.musicTimer = setInterval(scheduler, audio.schedulerInterval);
     }
 
     function stopMusic() {
       audio.musicPlaying = false;
       if (audio.musicTimer) {
-        clearTimeout(audio.musicTimer);
+        clearInterval(audio.musicTimer);
         audio.musicTimer = null;
       }
     }
 
     function toggleMusic() {
       audio.musicEnabled = !audio.musicEnabled;
-      if (!audio.musicEnabled) {
-        stopMusic();
-      } else if (audio.musicStarted) {
-        startMusic();
+      if (audio.musicGain) {
+        audio.musicGain.gain.value = audio.musicEnabled ? audio.musicVolume : 0;
       }
     }
 
     function toggleMute() {
       audio.muted = !audio.muted;
-      if (audio.musicGain) {
-        audio.musicGain.gain.value = audio.muted ? 0 : audio.baseMusicVolume;
-      }
-      if (audio.sfxGain) {
-        audio.sfxGain.gain.value = audio.muted ? 0 : 0.1;
+      if (audio.masterGain) {
+        audio.masterGain.gain.value = audio.muted ? 0 : 1;
       }
     }
 
@@ -207,9 +232,7 @@
       }
       if (!audio.musicStarted) {
         audio.musicStarted = true;
-        if (audio.musicEnabled) {
-          startMusic();
-        }
+        startMusicOnce();
       }
     }
 
@@ -580,6 +603,8 @@
       ctx.fillText(`Lives: ${state.lives}`, 18, 44);
       ctx.fillText(`Level: ${state.level}`, canvas.width - 110, 24);
       ctx.fillText(`Music: ${audio.musicEnabled ? "ON" : "OFF"}`, canvas.width - 170, 44);
+      const audioState = audio.ctx ? audio.ctx.state : "suspended";
+      ctx.fillText(`AUDIO: ${audioState === "running" ? "OK" : "LOCKED"}`, canvas.width - 170, 64);
 
       ctx.fillStyle = "rgba(255,255,255,0.75)";
       const timers = state.powerTimers;
@@ -589,10 +614,10 @@
 
       ctx.fillStyle = "rgba(255,255,255,0.7)";
       if (state.paused) {
-        ctx.fillText("PAUSA", canvas.width - 90, 64);
+        ctx.fillText("PAUSA", canvas.width - 90, 82);
       }
       if (audio.muted) {
-        ctx.fillText("MUTE", canvas.width - 90, 82);
+        ctx.fillText("MUTE", canvas.width - 90, 100);
       }
 
       if (!state.running) {

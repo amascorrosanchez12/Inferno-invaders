@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>Inferno Invaders</title>
   <style>
     :root {
@@ -15,6 +15,7 @@
       display: grid;
       place-items: center;
       min-height: 100vh;
+      overscroll-behavior: none;
     }
     .wrap {
       display: grid;
@@ -91,11 +92,37 @@
       border: 2px solid #591313;
       box-shadow: 0 0 25px rgba(255, 80, 80, 0.4);
       image-rendering: pixelated;
+      width: min(92vw, 720px);
+      height: auto;
+      touch-action: none;
     }
     .hud {
       font-size: 14px;
       letter-spacing: 0.04em;
       opacity: 0.8;
+    }
+    .mobile-controls {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(72px, 1fr));
+      gap: 10px;
+      width: min(92vw, 520px);
+      margin: 0 auto;
+      touch-action: none;
+    }
+    .mobile-controls.hidden {
+      display: none;
+    }
+    .mobile-btn {
+      background: rgba(60, 10, 10, 0.9);
+      border: 1px solid #7a1f1f;
+      color: #ffdada;
+      padding: 12px 8px;
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      box-shadow: 0 0 12px rgba(255, 80, 80, 0.35);
+      touch-action: none;
+      user-select: none;
     }
   </style>
 </head>
@@ -104,6 +131,11 @@
     <div class="title">Inferno Invaders</div>
     <div class="subtitle">Space to shoot • A/D or ←/→ to move • R restart</div>
     <canvas id="game" width="720" height="540" aria-label="Inferno Invaders"></canvas>
+    <div id="mobile-controls" class="mobile-controls hidden" aria-label="Controles táctiles">
+      <button class="mobile-btn" data-action="left" type="button">Izq</button>
+      <button class="mobile-btn" data-action="shoot" type="button">Disparar</button>
+      <button class="mobile-btn" data-action="right" type="button">Der</button>
+    </div>
     <div class="hud">Mover: ⬅️ ➡️ · Disparar: Espacio · Pausa: P · Mute: M · High Score: H · Reiniciar: R</div>
     <div id="menu-screen" class="screen">
       <div class="screen-card">
@@ -154,6 +186,7 @@
       playerShots: [],
       powerUps: [], // Falling bonuses dropped by invaders
       particles: [], // Small embers for feedback
+      powerUpDropCooldown: 0,
       powerTimers: {
         rapid: 0,
         shield: 0,
@@ -217,6 +250,7 @@
     const menuHighScore = document.getElementById("menu-high-score");
     const menuMusic = document.getElementById("menu-music");
     const gameoverHighScore = document.getElementById("gameover-high-score");
+    const mobileControls = document.getElementById("mobile-controls");
 
     // Persistent high score storage.
     const HIGH_SCORE_KEY = "infernoInvadersHighScore";
@@ -235,6 +269,34 @@
       menuMusic.textContent = `Music: ${audio.musicEnabled ? "ON" : "OFF"}`;
       musicButton.textContent = `Music: ${audio.musicEnabled ? "ON" : "OFF"}`;
       gameoverHighScore.textContent = `High Score: ${state.highScore}`;
+    }
+
+    function setMobileControl(action, pressed) {
+      if (action === "left") keys.left = pressed;
+      if (action === "right") keys.right = pressed;
+      if (action === "shoot") keys.shoot = pressed;
+    }
+
+    function bindMobileButton(button) {
+      const action = button.dataset.action;
+      const press = (event) => {
+        event.preventDefault();
+        setMobileControl(action, true);
+      };
+      const release = (event) => {
+        event.preventDefault();
+        setMobileControl(action, false);
+      };
+      button.addEventListener("pointerdown", (event) => {
+        press(event);
+        button.setPointerCapture(event.pointerId);
+      });
+      button.addEventListener("pointerup", release);
+      button.addEventListener("pointercancel", release);
+      button.addEventListener("pointerleave", release);
+      button.addEventListener("touchstart", press, { passive: false });
+      button.addEventListener("touchend", release, { passive: false });
+      button.addEventListener("touchcancel", release, { passive: false });
     }
 
     function initAudio() {
@@ -385,6 +447,7 @@
       state.playerShots = [];
       state.powerUps = [];
       state.particles = [];
+      state.powerUpDropCooldown = 0;
       state.powerTimers.rapid = 0;
       state.powerTimers.shield = 0;
       state.powerTimers.spread = 0;
@@ -400,8 +463,12 @@
       state.running = false;
       state.paused = false;
       state.gameOver = false;
+      keys.left = false;
+      keys.right = false;
+      keys.shoot = false;
       menuScreen.classList.remove("hidden");
       gameoverScreen.classList.add("hidden");
+      mobileControls.classList.add("hidden");
       refreshMenu();
     }
 
@@ -411,11 +478,13 @@
       state.inMenu = false;
       menuScreen.classList.add("hidden");
       gameoverScreen.classList.add("hidden");
+      mobileControls.classList.remove("hidden");
       handleFirstInteraction();
     }
 
     function showGameOverMenu() {
       gameoverScreen.classList.remove("hidden");
+      mobileControls.classList.add("hidden");
       refreshMenu();
     }
 
@@ -514,8 +583,13 @@
     }
 
     function spawnPowerUp(x, y) {
-      const roll = Math.random();
-      if (roll > 0.2) return;
+      // Reduce power-up frequency: lower base chance + cooldown + active-power penalty.
+      if (state.powerUpDropCooldown > 0) return;
+      const hasActivePower =
+        state.powerTimers.rapid > 0 || state.powerTimers.shield > 0 || state.powerTimers.spread > 0;
+      const baseChance = 0.06;
+      const dropChance = hasActivePower ? baseChance * 0.5 : baseChance;
+      if (Math.random() > dropChance) return;
       const types = ["rapid", "shield", "spread"];
       const type = types[Math.floor(Math.random() * types.length)];
       state.powerUps.push({
@@ -525,6 +599,7 @@
         speed: 90,
         type,
       });
+      state.powerUpDropCooldown = 4;
     }
 
     function spawnParticles(x, y, color = "#f26b6b", count = 10) {
@@ -648,6 +723,9 @@
           state.powerTimers[key] = Math.max(0, state.powerTimers[key] - dt);
         }
       });
+      if (state.powerUpDropCooldown > 0) {
+        state.powerUpDropCooldown = Math.max(0, state.powerUpDropCooldown - dt);
+      }
     }
 
     function updateHighScore(dt) {
@@ -905,6 +983,8 @@
     // First user input resumes AudioContext and starts music once.
     window.addEventListener("keydown", handleFirstInteraction, { once: true });
     window.addEventListener("click", handleFirstInteraction, { once: true });
+
+    mobileControls.querySelectorAll("[data-action]").forEach(bindMobileButton);
 
     playButton.addEventListener("click", startGame);
     restartButton.addEventListener("click", () => {

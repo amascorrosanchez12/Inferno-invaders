@@ -259,7 +259,7 @@
       nextNoteTime: 0,
       lookahead: 0.1,
       schedulerInterval: 25,
-      musicVolume: 0.3, // Default music gain (tweakable).
+      musicVolume: 0.35, // Default music gain (tweakable).
       masterVolume: 0.9, // Master safety gain to avoid clipping.
       musicGain: null,
       sfxGain: null,
@@ -315,7 +315,7 @@
       menuHighScore.textContent = `High Score: ${state.highScore}`;
       menuMusic.textContent = `Music: ${audio.musicEnabled ? "ON" : "OFF"}`;
       musicButton.textContent = `Music: ${audio.musicEnabled ? "ON" : "OFF"}`;
-      menuMusicVol.textContent = `Music Vol: ${audio.musicVolume <= 0.24 ? "LOW" : audio.musicVolume <= 0.33 ? "MID" : "HIGH"}`;
+      menuMusicVol.textContent = `Music Vol: ${audio.musicVolume <= 0.2 ? "LOW" : audio.musicVolume <= 0.45 ? "MID" : "HIGH"}`;
       gameoverHighScore.textContent = `High Score: ${state.highScore}`;
     }
 
@@ -357,14 +357,14 @@
         audio.sfxGain = audio.ctx.createGain();
         audio.masterGain.gain.value = audio.masterVolume;
         audio.musicGain.gain.value = audio.musicEnabled ? audio.musicVolume : 0;
-        audio.sfxGain.gain.value = 0.2;
+        audio.sfxGain.gain.value = 0.7;
         audio.musicGain.connect(audio.masterGain);
         audio.sfxGain.connect(audio.masterGain);
         audio.masterGain.connect(audio.ctx.destination);
       }
     }
 
-    function beep(frequency, duration, type = "sine", volume = 0.07) {
+    function beep(frequency, duration, type = "sine", volume = 0.12) {
       if (!audio.enabled || audio.muted) return;
       initAudio();
       const now = audio.ctx.currentTime;
@@ -376,11 +376,11 @@
       oscillator.connect(gain).connect(audio.sfxGain);
       oscillator.start(now);
       oscillator.stop(now + duration);
-      // Duck music briefly when SFX plays
+      // Duck music briefly when SFX plays (short + subtle to preserve loudness).
       if (audio.musicGain && !audio.muted) {
         audio.musicGain.gain.cancelScheduledValues(now);
-        audio.musicGain.gain.setTargetAtTime(audio.musicVolume * 0.85, now, 0.02);
-        audio.musicGain.gain.setTargetAtTime(audio.musicEnabled ? audio.musicVolume : 0, now + duration, 0.15);
+        audio.musicGain.gain.setTargetAtTime(audio.musicVolume * 0.95, now, 0.02);
+        audio.musicGain.gain.setTargetAtTime(audio.musicEnabled ? audio.musicVolume : 0, now + 0.2, 0.08);
       }
     }
 
@@ -540,6 +540,8 @@
       gameoverScreen.classList.add("hidden");
       mobileControls.classList.remove("hidden");
       handleFirstInteraction();
+      // Audible test beep after user interaction to confirm volume.
+      beep(880, 0.08, "triangle", 0.14);
     }
 
     function showGameOverMenu() {
@@ -869,9 +871,10 @@
       ctx.save();
       ctx.translate(invader.x, invader.y);
       // Draw invaders as a centered devil emoji; fallback to text if emoji fails.
+      ctx.globalAlpha = 1;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.font = "28px \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\", sans-serif";
+      ctx.font = "24px system-ui, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\"";
       ctx.fillText("😈", 0, 0);
       if (!ctx.measureText("😈").width) {
         ctx.fillStyle = "#e9d1d1";
@@ -1054,9 +1057,9 @@
     mobileControls.querySelectorAll("[data-action]").forEach(bindMobileButton);
 
     playButton.addEventListener("click", startGame);
-    musicVolLow.addEventListener("click", () => setMusicVolume(0.24));
-    musicVolMid.addEventListener("click", () => setMusicVolume(0.3));
-    musicVolHigh.addEventListener("click", () => setMusicVolume(0.36));
+    musicVolLow.addEventListener("click", () => setMusicVolume(0.18));
+    musicVolMid.addEventListener("click", () => setMusicVolume(0.35));
+    musicVolHigh.addEventListener("click", () => setMusicVolume(0.6));
     restartButton.addEventListener("click", () => {
       resetGame();
       state.inMenu = false;

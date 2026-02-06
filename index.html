@@ -871,9 +871,10 @@
       ctx.save();
       ctx.translate(invader.x, invader.y);
       // Draw invaders as a centered devil emoji; fallback to text if emoji fails.
+      ctx.globalAlpha = 1;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.font = "28px \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\", sans-serif";
+      ctx.font = "24px system-ui, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\"";
       ctx.fillText("😈", 0, 0);
       if (!ctx.measureText("😈").width) {
         ctx.fillStyle = "#e9d1d1";

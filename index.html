@@ -868,24 +868,16 @@
     function drawInvader(invader) {
       ctx.save();
       ctx.translate(invader.x, invader.y);
-      ctx.fillStyle = "#e9d1d1";
-      ctx.beginPath();
-      ctx.arc(0, 0, 16, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "#4b0000";
-      ctx.beginPath();
-      ctx.arc(-5, -2, 3, 0, Math.PI * 2);
-      ctx.arc(6, -2, 3, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.strokeStyle = "#4b0000";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(-6, 6);
-      ctx.lineTo(6, 6);
-      ctx.stroke();
-
+      // Draw invaders as a centered devil emoji; fallback to text if emoji fails.
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "28px \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\", sans-serif";
+      ctx.fillText("😈", 0, 0);
+      if (!ctx.measureText("😈").width) {
+        ctx.fillStyle = "#e9d1d1";
+        ctx.font = "16px Trebuchet MS";
+        ctx.fillText("DEVIL", 0, 0);
+      }
       ctx.restore();
     }
 

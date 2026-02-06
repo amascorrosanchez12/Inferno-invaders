@@ -184,6 +184,9 @@
       } else {
         startMusic();
       }
+      oscillator.connect(gain).connect(audio.ctx.destination);
+      oscillator.start(now);
+      oscillator.stop(now + duration);
     }
 
     function resetGrid() {
@@ -232,6 +235,11 @@
           vx: Math.sin(angle) * speed,
           vy: -Math.cos(angle) * speed,
         });
+      state.playerShots.push({
+        x: player.x,
+        y: player.y - player.radius,
+        radius: 4,
+        speed: 380,
       });
       beep(520, 0.08, "square", 0.04);
     }
@@ -243,6 +251,7 @@
         radius: 5,
         vx: 0,
         vy: 180 + state.level * 10,
+        speed: 180 + state.level * 10,
       });
       beep(220, 0.08, "sawtooth", 0.03);
     }
@@ -285,6 +294,8 @@
         shot.x += shot.vx * dt;
         shot.y += shot.vy * dt;
       });
+      state.playerShots.forEach((shot) => (shot.y -= shot.speed * dt));
+      state.enemyShots.forEach((shot) => (shot.y += shot.speed * dt));
 
       state.playerShots = state.playerShots.filter((shot) => shot.y > -20);
       state.enemyShots = state.enemyShots.filter((shot) => shot.y < canvas.height + 20);
@@ -389,6 +400,14 @@
         particle.y += particle.vy * dt;
       });
       state.particles = state.particles.filter((particle) => particle.life > 0);
+          state.lives -= 1;
+          state.shakeTime = 0.25;
+          beep(120, 0.15, "sawtooth", 0.08);
+          if (state.lives <= 0) {
+            state.running = false;
+          }
+        }
+      });
     }
 
     function advanceLevelIfNeeded() {
@@ -424,6 +443,10 @@
           state.powerTimers[key] = Math.max(0, state.powerTimers[key] - dt);
         }
       });
+    }
+
+        player.cooldown = 0.28;
+      }
     }
 
     function drawBackground(dt) {

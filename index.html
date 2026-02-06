@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Inferno Invaders</title>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+    body {
+      margin: 0;
+      background: #050000;
+      font-family: "Trebuchet MS", system-ui, sans-serif;
+      display: grid;
+      place-items: center;
+      min-height: 100vh;
+    }
+    .wrap {
+      display: grid;
+      gap: 12px;
+      text-align: center;
+      color: #f7d6d6;
+    }
+    canvas {
+      background: #0b0000;
+      border: 2px solid #591313;
+      box-shadow: 0 0 25px rgba(255, 80, 80, 0.4);
+      image-rendering: pixelated;
+    }
+    .hud {
+      font-size: 14px;
+      letter-spacing: 0.04em;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <canvas id="game" width="720" height="540" aria-label="Inferno Invaders"></canvas>
+    <div class="hud">Mover: ⬅️ ➡️ · Disparar: Espacio · Reiniciar: R</div>
+  </div>
+  <script>
+    // ============================
+    // Inferno Invaders (Canvas)
+    // ============================
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+
+    const state = {
+      running: true,
+      score: 0,
+      lives: 3,
+      level: 1,
+      shakeTime: 0,
+      backgroundPulse: 0,
+      lastTime: 0,
+      enemyShots: [],
+      playerShots: [],
+    };
+
+    const keys = {
+      left: false,
+      right: false,
+      shoot: false,
+    };
+
+    const player = {
+      x: canvas.width / 2,
+      y: canvas.height - 60,
+      radius: 18,
+      speed: 260,
+      cooldown: 0,
+    };
+
+    const invaderGrid = {
+      rows: 4,
+      cols: 8,
+      spacingX: 64,
+      spacingY: 52,
+      offsetX: 80,
+      offsetY: 70,
+      direction: 1,
+      speed: 32,
+      drop: 18,
+      invaders: [],
+    };
+
+    // Audio context for simple beeps (no external assets)
+    const audio = {
+      ctx: null,
+      enabled: true,
+    };
+
+    function initAudio() {
+      if (!audio.ctx) {
+        audio.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+    }
+
+    function beep(frequency, duration, type = "sine", volume = 0.05) {
+      if (!audio.enabled) return;
+      initAudio();
+      const now = audio.ctx.currentTime;
+      const oscillator = audio.ctx.createOscillator();
+      const gain = audio.ctx.createGain();
+      oscillator.type = type;
+      oscillator.frequency.value = frequency;
+      gain.gain.value = volume;
+      oscillator.connect(gain).connect(audio.ctx.destination);
+      oscillator.start(now);
+      oscillator.stop(now + duration);
+    }
+
+    function resetGrid() {
+      invaderGrid.invaders = [];
+      for (let row = 0; row < invaderGrid.rows; row++) {
+        for (let col = 0; col < invaderGrid.cols; col++) {
+          invaderGrid.invaders.push({
+            x: invaderGrid.offsetX + col * invaderGrid.spacingX,
+            y: invaderGrid.offsetY + row * invaderGrid.spacingY,
+            alive: true,
+          });
+        }
+      }
+    }
+
+    function resetGame() {
+      state.running = true;
+      state.score = 0;
+      state.lives = 3;
+      state.level = 1;
+      state.enemyShots = [];
+      state.playerShots = [];
+      player.x = canvas.width / 2;
+      player.cooldown = 0;
+      invaderGrid.speed = 32;
+      invaderGrid.direction = 1;
+      resetGrid();
+    }
+
+    resetGame();
+
+    function spawnPlayerShot() {
+      state.playerShots.push({
+        x: player.x,
+        y: player.y - player.radius,
+        radius: 4,
+        speed: 380,
+      });
+      beep(520, 0.08, "square", 0.04);
+    }
+
+    function spawnEnemyShot(origin) {
+      state.enemyShots.push({
+        x: origin.x,
+        y: origin.y + 16,
+        radius: 5,
+        speed: 180 + state.level * 10,
+      });
+      beep(220, 0.08, "sawtooth", 0.03);
+    }
+
+    function updateInvaders(dt) {
+      const step = invaderGrid.speed * invaderGrid.direction * dt;
+      let hitEdge = false;
+
+      invaderGrid.invaders.forEach((invader) => {
+        if (!invader.alive) return;
+        invader.x += step;
+        if (invader.x > canvas.width - invaderGrid.offsetX || invader.x < invaderGrid.offsetX) {
+          hitEdge = true;
+        }
+      });
+
+      if (hitEdge) {
+        invaderGrid.direction *= -1;
+        invaderGrid.invaders.forEach((invader) => {
+          if (!invader.alive) return;
+          invader.y += invaderGrid.drop;
+        });
+      }
+
+      // Random enemy shooting (scaled by level)
+      if (Math.random() < 0.012 + state.level * 0.003) {
+        const alive = invaderGrid.invaders.filter((invader) => invader.alive);
+        if (alive.length) {
+          spawnEnemyShot(alive[Math.floor(Math.random() * alive.length)]);
+        }
+      }
+    }
+
+    function updateShots(dt) {
+      state.playerShots.forEach((shot) => (shot.y -= shot.speed * dt));
+      state.enemyShots.forEach((shot) => (shot.y += shot.speed * dt));
+
+      state.playerShots = state.playerShots.filter((shot) => shot.y > -20);
+      state.enemyShots = state.enemyShots.filter((shot) => shot.y < canvas.height + 20);
+    }
+
+    function circleHit(a, b) {
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      return Math.hypot(dx, dy) < a.radius + b.radius;
+    }
+
+    function handleCollisions() {
+      // Player shots vs invaders
+      state.playerShots.forEach((shot) => {
+        invaderGrid.invaders.forEach((invader) => {
+          if (!invader.alive) return;
+          const target = { x: invader.x, y: invader.y, radius: 16 };
+          if (circleHit(shot, target)) {
+            invader.alive = false;
+            shot.y = -100;
+            state.score += 50;
+            beep(740, 0.06, "triangle", 0.04);
+          }
+        });
+      });
+
+      // Enemy shots vs player
+      state.enemyShots.forEach((shot) => {
+        if (circleHit(shot, player)) {
+          shot.y = canvas.height + 50;
+          state.lives -= 1;
+          state.shakeTime = 0.25;
+          beep(120, 0.15, "sawtooth", 0.08);
+          if (state.lives <= 0) {
+            state.running = false;
+          }
+        }
+      });
+    }
+
+    function advanceLevelIfNeeded() {
+      const remaining = invaderGrid.invaders.some((invader) => invader.alive);
+      if (!remaining) {
+        state.level += 1;
+        state.score += 200;
+        invaderGrid.speed += 8;
+        invaderGrid.direction = 1;
+        resetGrid();
+        beep(880, 0.12, "triangle", 0.06);
+      }
+    }
+
+    function updatePlayer(dt) {
+      if (keys.left) player.x -= player.speed * dt;
+      if (keys.right) player.x += player.speed * dt;
+      player.x = Math.max(player.radius + 10, Math.min(canvas.width - player.radius - 10, player.x));
+
+      if (player.cooldown > 0) {
+        player.cooldown -= dt;
+      }
+
+      if (keys.shoot && player.cooldown <= 0 && state.running) {
+        spawnPlayerShot();
+        player.cooldown = 0.28;
+      }
+    }
+
+    function drawBackground(dt) {
+      state.backgroundPulse += dt * 1.4;
+      const glow = 0.12 + Math.sin(state.backgroundPulse) * 0.05;
+      const gradient = ctx.createRadialGradient(
+        canvas.width / 2,
+        canvas.height / 2,
+        40,
+        canvas.width / 2,
+        canvas.height / 2,
+        canvas.width / 1.2
+      );
+      gradient.addColorStop(0, `rgba(130, 10, 10, ${glow + 0.08})`);
+      gradient.addColorStop(1, "rgba(0, 0, 0, 0.9)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Subtle flicker overlay
+      ctx.fillStyle = `rgba(255, 60, 60, ${0.04 + Math.random() * 0.03})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function drawPlayer() {
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      ctx.fillStyle = "#f24848";
+      ctx.beginPath();
+      ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "#ffd1d1";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, player.radius - 6, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = "#320000";
+      ctx.beginPath();
+      ctx.arc(-5, -4, 3, 0, Math.PI * 2);
+      ctx.arc(6, -4, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawInvader(invader) {
+      ctx.save();
+      ctx.translate(invader.x, invader.y);
+      ctx.fillStyle = "#e9d1d1";
+      ctx.beginPath();
+      ctx.arc(0, 0, 16, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#4b0000";
+      ctx.beginPath();
+      ctx.arc(-5, -2, 3, 0, Math.PI * 2);
+      ctx.arc(6, -2, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "#4b0000";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-6, 6);
+      ctx.lineTo(6, 6);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function drawShots() {
+      ctx.fillStyle = "#f9a23a";
+      state.playerShots.forEach((shot) => {
+        ctx.beginPath();
+        ctx.arc(shot.x, shot.y, shot.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      ctx.fillStyle = "#6de2ff";
+      state.enemyShots.forEach((shot) => {
+        ctx.beginPath();
+        ctx.arc(shot.x, shot.y, shot.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    function drawHUD() {
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.font = "16px Trebuchet MS";
+      ctx.fillText(`Score: ${state.score}`, 18, 24);
+      ctx.fillText(`Lives: ${state.lives}`, 18, 44);
+      ctx.fillText(`Level: ${state.level}`, canvas.width - 110, 24);
+
+      if (!state.running) {
+        ctx.fillStyle = "rgba(0,0,0,0.6)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#ffd8d8";
+        ctx.font = "bold 36px Trebuchet MS";
+        ctx.fillText("GAME OVER", canvas.width / 2 - 120, canvas.height / 2);
+        ctx.font = "16px Trebuchet MS";
+        ctx.fillText("Pulsa R para reiniciar", canvas.width / 2 - 95, canvas.height / 2 + 30);
+      }
+    }
+
+    function applyScreenShake(dt) {
+      if (state.shakeTime > 0) {
+        state.shakeTime -= dt;
+        const intensity = 6 * (state.shakeTime / 0.25);
+        const offsetX = (Math.random() - 0.5) * intensity;
+        const offsetY = (Math.random() - 0.5) * intensity;
+        ctx.translate(offsetX, offsetY);
+      }
+    }
+
+    function update(timestamp) {
+      const dt = Math.min((timestamp - state.lastTime) / 1000, 0.033);
+      state.lastTime = timestamp;
+
+      ctx.save();
+      drawBackground(dt);
+      applyScreenShake(dt);
+
+      if (state.running) {
+        updatePlayer(dt);
+        updateInvaders(dt);
+        updateShots(dt);
+        handleCollisions();
+        advanceLevelIfNeeded();
+      }
+
+      drawPlayer();
+      invaderGrid.invaders.forEach((invader) => invader.alive && drawInvader(invader));
+      drawShots();
+      drawHUD();
+
+      ctx.restore();
+      requestAnimationFrame(update);
+    }
+
+    requestAnimationFrame(update);
+
+    window.addEventListener("keydown", (event) => {
+      if (event.code === "ArrowLeft") keys.left = true;
+      if (event.code === "ArrowRight") keys.right = true;
+      if (event.code === "Space") {
+        keys.shoot = true;
+        initAudio();
+      }
+      if (event.code === "KeyR") {
+        resetGame();
+      }
+    });
+
+    window.addEventListener("keyup", (event) => {
+      if (event.code === "ArrowLeft") keys.left = false;
+      if (event.code === "ArrowRight") keys.right = false;
+      if (event.code === "Space") keys.shoot = false;
+    });
+  </script>
+</body>
+</html>

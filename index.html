@@ -57,6 +57,13 @@
       lastTime: 0,
       enemyShots: [],
       playerShots: [],
+      powerUps: [], // Falling bonuses dropped by invaders
+      particles: [], // Small embers for feedback
+      powerTimers: {
+        rapid: 0,
+        shield: 0,
+        spread: 0,
+      },
     };
 
     const keys = {
@@ -90,11 +97,23 @@
     const audio = {
       ctx: null,
       enabled: true,
+      musicEnabled: true,
+      musicPlaying: false,
+      musicTimer: null,
+      musicGain: null,
+      sfxGain: null,
+      baseMusicVolume: 0.035,
     };
 
     function initAudio() {
       if (!audio.ctx) {
         audio.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        audio.musicGain = audio.ctx.createGain();
+        audio.sfxGain = audio.ctx.createGain();
+        audio.musicGain.gain.value = audio.baseMusicVolume;
+        audio.sfxGain.gain.value = 0.1;
+        audio.musicGain.connect(audio.ctx.destination);
+        audio.sfxGain.connect(audio.ctx.destination);
       }
     }
 
@@ -107,6 +126,64 @@
       oscillator.type = type;
       oscillator.frequency.value = frequency;
       gain.gain.value = volume;
+      oscillator.connect(gain).connect(audio.sfxGain);
+      oscillator.start(now);
+      oscillator.stop(now + duration);
+      // Duck music briefly when SFX plays
+      if (audio.musicGain) {
+        audio.musicGain.gain.cancelScheduledValues(now);
+        audio.musicGain.gain.setTargetAtTime(audio.baseMusicVolume * 0.4, now, 0.02);
+        audio.musicGain.gain.setTargetAtTime(audio.baseMusicVolume, now + duration, 0.15);
+      }
+    }
+
+    function scheduleMusicBeat() {
+      if (!audio.musicEnabled || !audio.ctx) return;
+      const now = audio.ctx.currentTime;
+      const tempo = 80 + state.level * 6;
+      const beatDuration = 60 / tempo;
+      const notes = [110, 165, 196, 220, 196, 165];
+      const tone = notes[Math.floor(Math.random() * notes.length)];
+      const osc = audio.ctx.createOscillator();
+      const gain = audio.ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(tone, now);
+      gain.gain.setValueAtTime(audio.baseMusicVolume, now);
+      gain.gain.exponentialRampToValueAtTime(audio.baseMusicVolume * 0.4, now + beatDuration * 0.9);
+      osc.connect(gain).connect(audio.musicGain);
+      osc.start(now);
+      osc.stop(now + beatDuration);
+    }
+
+    function startMusic() {
+      if (audio.musicPlaying || !audio.musicEnabled) return;
+      initAudio();
+      audio.musicPlaying = true;
+      const loop = () => {
+        if (!audio.musicPlaying) return;
+        const tempo = 80 + state.level * 6;
+        const beatDuration = 60 / tempo;
+        scheduleMusicBeat();
+        audio.musicTimer = setTimeout(loop, beatDuration * 1000);
+      };
+      loop();
+    }
+
+    function stopMusic() {
+      audio.musicPlaying = false;
+      if (audio.musicTimer) {
+        clearTimeout(audio.musicTimer);
+        audio.musicTimer = null;
+      }
+    }
+
+    function toggleMusic() {
+      audio.musicEnabled = !audio.musicEnabled;
+      if (!audio.musicEnabled) {
+        stopMusic();
+      } else {
+        startMusic();
+      }
       oscillator.connect(gain).connect(audio.ctx.destination);
       oscillator.start(now);
       oscillator.stop(now + duration);
@@ -132,6 +209,11 @@
       state.level = 1;
       state.enemyShots = [];
       state.playerShots = [];
+      state.powerUps = [];
+      state.particles = [];
+      state.powerTimers.rapid = 0;
+      state.powerTimers.shield = 0;
+      state.powerTimers.spread = 0;
       player.x = canvas.width / 2;
       player.cooldown = 0;
       invaderGrid.speed = 32;
@@ -142,6 +224,17 @@
     resetGame();
 
     function spawnPlayerShot() {
+      const speed = 380;
+      const spreadActive = state.powerTimers.spread > 0;
+      const shots = spreadActive ? [-0.35, 0, 0.35] : [0];
+      shots.forEach((angle) => {
+        state.playerShots.push({
+          x: player.x,
+          y: player.y - player.radius,
+          radius: 4,
+          vx: Math.sin(angle) * speed,
+          vy: -Math.cos(angle) * speed,
+        });
       state.playerShots.push({
         x: player.x,
         y: player.y - player.radius,
@@ -156,6 +249,8 @@
         x: origin.x,
         y: origin.y + 16,
         radius: 5,
+        vx: 0,
+        vy: 180 + state.level * 10,
         speed: 180 + state.level * 10,
       });
       beep(220, 0.08, "sawtooth", 0.03);
@@ -191,11 +286,46 @@
     }
 
     function updateShots(dt) {
+      state.playerShots.forEach((shot) => {
+        shot.x += shot.vx * dt;
+        shot.y += shot.vy * dt;
+      });
+      state.enemyShots.forEach((shot) => {
+        shot.x += shot.vx * dt;
+        shot.y += shot.vy * dt;
+      });
       state.playerShots.forEach((shot) => (shot.y -= shot.speed * dt));
       state.enemyShots.forEach((shot) => (shot.y += shot.speed * dt));
 
       state.playerShots = state.playerShots.filter((shot) => shot.y > -20);
       state.enemyShots = state.enemyShots.filter((shot) => shot.y < canvas.height + 20);
+    }
+
+    function spawnPowerUp(x, y) {
+      const roll = Math.random();
+      if (roll > 0.2) return;
+      const types = ["rapid", "shield", "spread"];
+      const type = types[Math.floor(Math.random() * types.length)];
+      state.powerUps.push({
+        x,
+        y,
+        radius: 10,
+        speed: 90,
+        type,
+      });
+    }
+
+    function spawnParticles(x, y, color = "#f26b6b", count = 10) {
+      for (let i = 0; i < count; i++) {
+        state.particles.push({
+          x,
+          y,
+          vx: (Math.random() - 0.5) * 120,
+          vy: (Math.random() - 0.5) * 120,
+          life: 0.6 + Math.random() * 0.4,
+          color,
+        });
+      }
     }
 
     function circleHit(a, b) {
@@ -214,6 +344,8 @@
             invader.alive = false;
             shot.y = -100;
             state.score += 50;
+            spawnPowerUp(invader.x, invader.y);
+            spawnParticles(invader.x, invader.y, "#f5b15f");
             beep(740, 0.06, "triangle", 0.04);
           }
         });
@@ -223,6 +355,51 @@
       state.enemyShots.forEach((shot) => {
         if (circleHit(shot, player)) {
           shot.y = canvas.height + 50;
+          if (state.powerTimers.shield > 0) {
+            state.powerTimers.shield = 0;
+            spawnParticles(player.x, player.y, "#6de2ff", 18);
+            beep(320, 0.12, "triangle", 0.06);
+          } else {
+            state.lives -= 1;
+            state.shakeTime = 0.25;
+            spawnParticles(player.x, player.y, "#ff6868", 16);
+            beep(120, 0.15, "sawtooth", 0.08);
+            if (state.lives <= 0) {
+              state.running = false;
+            }
+          }
+        }
+      });
+    }
+
+    function updatePowerUps(dt) {
+      state.powerUps.forEach((power) => {
+        power.y += power.speed * dt;
+        if (circleHit(power, player)) {
+          if (power.type === "rapid") {
+            state.powerTimers.rapid = 6;
+          }
+          if (power.type === "shield") {
+            state.powerTimers.shield = 8;
+          }
+          if (power.type === "spread") {
+            state.powerTimers.spread = 7;
+          }
+          beep(660, 0.1, "triangle", 0.05);
+          spawnParticles(power.x, power.y, "#fff2a1", 12);
+          power.y = canvas.height + 40;
+        }
+      });
+      state.powerUps = state.powerUps.filter((power) => power.y < canvas.height + 20);
+    }
+
+    function updateParticles(dt) {
+      state.particles.forEach((particle) => {
+        particle.life -= dt;
+        particle.x += particle.vx * dt;
+        particle.y += particle.vy * dt;
+      });
+      state.particles = state.particles.filter((particle) => particle.life > 0);
           state.lives -= 1;
           state.shakeTime = 0.25;
           beep(120, 0.15, "sawtooth", 0.08);
@@ -256,6 +433,18 @@
 
       if (keys.shoot && player.cooldown <= 0 && state.running) {
         spawnPlayerShot();
+        player.cooldown = state.powerTimers.rapid > 0 ? 0.12 : 0.28;
+      }
+    }
+
+    function updatePowerTimers(dt) {
+      Object.keys(state.powerTimers).forEach((key) => {
+        if (state.powerTimers[key] > 0) {
+          state.powerTimers[key] = Math.max(0, state.powerTimers[key] - dt);
+        }
+      });
+    }
+
         player.cooldown = 0.28;
       }
     }
@@ -288,6 +477,14 @@
       ctx.beginPath();
       ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
       ctx.fill();
+
+      if (state.powerTimers.shield > 0) {
+        ctx.strokeStyle = "rgba(109, 226, 255, 0.8)";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, player.radius + 6, 0, Math.PI * 2);
+        ctx.stroke();
+      }
 
       ctx.strokeStyle = "#ffd1d1";
       ctx.lineWidth = 2;
@@ -343,12 +540,47 @@
       });
     }
 
+    function drawPowerUps() {
+      state.powerUps.forEach((power) => {
+        ctx.save();
+        ctx.translate(power.x, power.y);
+        ctx.strokeStyle = "#fff2a1";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, power.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = "#ff9f43";
+        ctx.font = "12px Trebuchet MS";
+        const label = power.type === "rapid" ? "R" : power.type === "shield" ? "S" : "X";
+        ctx.fillText(label, -4, 4);
+        ctx.restore();
+      });
+    }
+
+    function drawParticles() {
+      state.particles.forEach((particle) => {
+        ctx.fillStyle = particle.color;
+        ctx.globalAlpha = Math.max(0, particle.life);
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+    }
+
     function drawHUD() {
       ctx.fillStyle = "rgba(255,255,255,0.85)";
       ctx.font = "16px Trebuchet MS";
       ctx.fillText(`Score: ${state.score}`, 18, 24);
       ctx.fillText(`Lives: ${state.lives}`, 18, 44);
       ctx.fillText(`Level: ${state.level}`, canvas.width - 110, 24);
+      ctx.fillText(`Music: ${audio.musicEnabled ? "ON" : "OFF"} (M)`, canvas.width - 170, 44);
+
+      ctx.fillStyle = "rgba(255,255,255,0.75)";
+      const timers = state.powerTimers;
+      ctx.fillText(`Rapid: ${timers.rapid.toFixed(1)}s`, 18, 64);
+      ctx.fillText(`Shield: ${timers.shield.toFixed(1)}s`, 18, 82);
+      ctx.fillText(`Spread: ${timers.spread.toFixed(1)}s`, 18, 100);
 
       if (!state.running) {
         ctx.fillStyle = "rgba(0,0,0,0.6)";
@@ -383,6 +615,9 @@
         updatePlayer(dt);
         updateInvaders(dt);
         updateShots(dt);
+        updatePowerUps(dt);
+        updateParticles(dt);
+        updatePowerTimers(dt);
         handleCollisions();
         advanceLevelIfNeeded();
       }
@@ -390,6 +625,8 @@
       drawPlayer();
       invaderGrid.invaders.forEach((invader) => invader.alive && drawInvader(invader));
       drawShots();
+      drawPowerUps();
+      drawParticles();
       drawHUD();
 
       ctx.restore();
@@ -404,9 +641,13 @@
       if (event.code === "Space") {
         keys.shoot = true;
         initAudio();
+        startMusic();
       }
       if (event.code === "KeyR") {
         resetGame();
+      }
+      if (event.code === "KeyM") {
+        toggleMusic();
       }
     });
 

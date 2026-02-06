@@ -38,7 +38,7 @@
 <body>
   <div class="wrap">
     <canvas id="game" width="720" height="540" aria-label="Inferno Invaders"></canvas>
-    <div class="hud">Mover: ⬅️ ➡️ · Disparar: Espacio · Reiniciar: R</div>
+    <div class="hud">Mover: ⬅️ ➡️ · Disparar: Espacio · Pausa: P · Mute: M · Reiniciar: R</div>
   </div>
   <script>
     // ============================
@@ -52,6 +52,7 @@
       score: 0,
       lives: 3,
       level: 1,
+      paused: false,
       shakeTime: 0,
       backgroundPulse: 0,
       lastTime: 0,
@@ -97,6 +98,7 @@
     const audio = {
       ctx: null,
       enabled: true,
+      muted: false,
       musicEnabled: true,
       musicPlaying: false,
       musicTimer: null,
@@ -118,7 +120,7 @@
     }
 
     function beep(frequency, duration, type = "sine", volume = 0.05) {
-      if (!audio.enabled) return;
+      if (!audio.enabled || audio.muted) return;
       initAudio();
       const now = audio.ctx.currentTime;
       const oscillator = audio.ctx.createOscillator();
@@ -130,7 +132,7 @@
       oscillator.start(now);
       oscillator.stop(now + duration);
       // Duck music briefly when SFX plays
-      if (audio.musicGain) {
+      if (audio.musicGain && !audio.muted) {
         audio.musicGain.gain.cancelScheduledValues(now);
         audio.musicGain.gain.setTargetAtTime(audio.baseMusicVolume * 0.4, now, 0.02);
         audio.musicGain.gain.setTargetAtTime(audio.baseMusicVolume, now + duration, 0.15);
@@ -184,9 +186,16 @@
       } else {
         startMusic();
       }
-      oscillator.connect(gain).connect(audio.ctx.destination);
-      oscillator.start(now);
-      oscillator.stop(now + duration);
+    }
+
+    function toggleMute() {
+      audio.muted = !audio.muted;
+      if (audio.musicGain) {
+        audio.musicGain.gain.value = audio.muted ? 0 : audio.baseMusicVolume;
+      }
+      if (audio.sfxGain) {
+        audio.sfxGain.gain.value = audio.muted ? 0 : 0.1;
+      }
     }
 
     function resetGrid() {
@@ -204,6 +213,7 @@
 
     function resetGame() {
       state.running = true;
+      state.paused = false;
       state.score = 0;
       state.lives = 3;
       state.level = 1;
@@ -235,11 +245,6 @@
           vx: Math.sin(angle) * speed,
           vy: -Math.cos(angle) * speed,
         });
-      state.playerShots.push({
-        x: player.x,
-        y: player.y - player.radius,
-        radius: 4,
-        speed: 380,
       });
       beep(520, 0.08, "square", 0.04);
     }
@@ -251,7 +256,6 @@
         radius: 5,
         vx: 0,
         vy: 180 + state.level * 10,
-        speed: 180 + state.level * 10,
       });
       beep(220, 0.08, "sawtooth", 0.03);
     }
@@ -294,8 +298,6 @@
         shot.x += shot.vx * dt;
         shot.y += shot.vy * dt;
       });
-      state.playerShots.forEach((shot) => (shot.y -= shot.speed * dt));
-      state.enemyShots.forEach((shot) => (shot.y += shot.speed * dt));
 
       state.playerShots = state.playerShots.filter((shot) => shot.y > -20);
       state.enemyShots = state.enemyShots.filter((shot) => shot.y < canvas.height + 20);
@@ -400,14 +402,6 @@
         particle.y += particle.vy * dt;
       });
       state.particles = state.particles.filter((particle) => particle.life > 0);
-          state.lives -= 1;
-          state.shakeTime = 0.25;
-          beep(120, 0.15, "sawtooth", 0.08);
-          if (state.lives <= 0) {
-            state.running = false;
-          }
-        }
-      });
     }
 
     function advanceLevelIfNeeded() {
@@ -443,10 +437,6 @@
           state.powerTimers[key] = Math.max(0, state.powerTimers[key] - dt);
         }
       });
-    }
-
-        player.cooldown = 0.28;
-      }
     }
 
     function drawBackground(dt) {
@@ -574,13 +564,21 @@
       ctx.fillText(`Score: ${state.score}`, 18, 24);
       ctx.fillText(`Lives: ${state.lives}`, 18, 44);
       ctx.fillText(`Level: ${state.level}`, canvas.width - 110, 24);
-      ctx.fillText(`Music: ${audio.musicEnabled ? "ON" : "OFF"} (M)`, canvas.width - 170, 44);
+      ctx.fillText(`Music: ${audio.musicEnabled ? "ON" : "OFF"}`, canvas.width - 170, 44);
 
       ctx.fillStyle = "rgba(255,255,255,0.75)";
       const timers = state.powerTimers;
       ctx.fillText(`Rapid: ${timers.rapid.toFixed(1)}s`, 18, 64);
       ctx.fillText(`Shield: ${timers.shield.toFixed(1)}s`, 18, 82);
       ctx.fillText(`Spread: ${timers.spread.toFixed(1)}s`, 18, 100);
+
+      ctx.fillStyle = "rgba(255,255,255,0.7)";
+      if (state.paused) {
+        ctx.fillText("PAUSA", canvas.width - 90, 64);
+      }
+      if (audio.muted) {
+        ctx.fillText("MUTE", canvas.width - 90, 82);
+      }
 
       if (!state.running) {
         ctx.fillStyle = "rgba(0,0,0,0.6)";
@@ -591,6 +589,17 @@
         ctx.font = "16px Trebuchet MS";
         ctx.fillText("Pulsa R para reiniciar", canvas.width / 2 - 95, canvas.height / 2 + 30);
       }
+    }
+
+    function drawPauseOverlay() {
+      if (!state.paused || !state.running) return;
+      ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#ffd8d8";
+      ctx.font = "bold 36px Trebuchet MS";
+      ctx.fillText("PAUSA", canvas.width / 2 - 70, canvas.height / 2);
+      ctx.font = "16px Trebuchet MS";
+      ctx.fillText("Pulsa P para continuar", canvas.width / 2 - 100, canvas.height / 2 + 28);
     }
 
     function applyScreenShake(dt) {
@@ -609,9 +618,11 @@
 
       ctx.save();
       drawBackground(dt);
-      applyScreenShake(dt);
+      if (!state.paused) {
+        applyScreenShake(dt);
+      }
 
-      if (state.running) {
+      if (state.running && !state.paused) {
         updatePlayer(dt);
         updateInvaders(dt);
         updateShots(dt);
@@ -628,6 +639,7 @@
       drawPowerUps();
       drawParticles();
       drawHUD();
+      drawPauseOverlay();
 
       ctx.restore();
       requestAnimationFrame(update);
@@ -646,8 +658,13 @@
       if (event.code === "KeyR") {
         resetGame();
       }
+      if (event.code === "KeyP") {
+        if (state.running) {
+          state.paused = !state.paused;
+        }
+      }
       if (event.code === "KeyM") {
-        toggleMusic();
+        toggleMute();
       }
     });
 

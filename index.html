@@ -452,17 +452,23 @@
 
     function updateInvaders(dt) {
       const step = invaderGrid.speed * invaderGrid.direction * dt;
-      let hitEdge = false;
+      let shouldDropThisTick = false;
+
+      invaderGrid.invaders.forEach((invader) => {
+        if (!invader.alive) return;
+        const nextX = invader.x + step;
+        if (nextX > canvas.width - invaderGrid.offsetX || nextX < invaderGrid.offsetX) {
+          shouldDropThisTick = true;
+        }
+      });
 
       invaderGrid.invaders.forEach((invader) => {
         if (!invader.alive) return;
         invader.x += step;
-        if (invader.x > canvas.width - invaderGrid.offsetX || invader.x < invaderGrid.offsetX) {
-          hitEdge = true;
-        }
       });
 
-      if (hitEdge) {
+      // Apply the edge drop only once per tick to avoid sudden double drops.
+      if (shouldDropThisTick) {
         invaderGrid.direction *= -1;
         invaderGrid.invaders.forEach((invader) => {
           if (!invader.alive) return;
@@ -856,7 +862,8 @@
     }
 
     function update(timestamp) {
-      const dt = Math.min((timestamp - state.lastTime) / 1000, 0.033);
+      // Clamp dt to avoid large jumps after tab switches or lag spikes.
+      const dt = Math.min((timestamp - state.lastTime) / 1000, 0.05);
       state.lastTime = timestamp;
 
       ctx.save();

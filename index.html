@@ -21,6 +21,7 @@
       gap: 12px;
       text-align: center;
       color: #f7d6d6;
+      position: relative;
     }
     .title {
       font-size: 28px;
@@ -33,6 +34,57 @@
       font-size: 12px;
       letter-spacing: 0.15em;
       opacity: 0.7;
+    }
+    .screen {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: rgba(0, 0, 0, 0.7);
+      border: 2px solid rgba(130, 20, 20, 0.7);
+      box-shadow: 0 0 18px rgba(255, 80, 80, 0.4);
+    }
+    .screen.hidden {
+      display: none;
+    }
+    .screen-card {
+      display: grid;
+      gap: 12px;
+      padding: 24px 28px;
+      background: rgba(20, 0, 0, 0.9);
+      border: 1px solid rgba(130, 20, 20, 0.8);
+      box-shadow: 0 0 18px rgba(255, 80, 80, 0.45);
+      color: #ffd4d4;
+    }
+    .screen-title {
+      font-size: 36px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      text-shadow: 0 0 16px rgba(255, 100, 100, 0.8);
+    }
+    .screen-subtitle {
+      font-size: 13px;
+      opacity: 0.8;
+      letter-spacing: 0.12em;
+    }
+    .screen-actions {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .screen button {
+      background: #3a0b0b;
+      color: #ffdada;
+      border: 1px solid #8a2b2b;
+      padding: 8px 16px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      box-shadow: 0 0 12px rgba(255, 80, 80, 0.3);
+    }
+    .screen button:hover {
+      background: #541010;
     }
     canvas {
       background: #0b0000;
@@ -53,6 +105,30 @@
     <div class="subtitle">Space to shoot • A/D or ←/→ to move • R restart</div>
     <canvas id="game" width="720" height="540" aria-label="Inferno Invaders"></canvas>
     <div class="hud">Mover: ⬅️ ➡️ · Disparar: Espacio · Pausa: P · Mute: M · High Score: H · Reiniciar: R</div>
+    <div id="menu-screen" class="screen">
+      <div class="screen-card">
+        <div class="screen-title">Inferno Invaders</div>
+        <div class="screen-subtitle">A/D o ←/→ para moverte • Espacio para disparar</div>
+        <div id="menu-high-score">High Score: 0</div>
+        <div id="menu-music">Music: ON</div>
+        <div class="screen-actions">
+          <button id="play-button" type="button">Jugar</button>
+          <button id="music-button" type="button">Music: ON/OFF</button>
+        </div>
+        <div class="screen-subtitle">Enter para iniciar</div>
+      </div>
+    </div>
+    <div id="gameover-screen" class="screen hidden">
+      <div class="screen-card">
+        <div class="screen-title">Game Over</div>
+        <div id="gameover-high-score">High Score: 0</div>
+        <div class="screen-actions">
+          <button id="restart-button" type="button">Reiniciar</button>
+          <button id="menu-button" type="button">Volver al menú</button>
+        </div>
+        <div class="screen-subtitle">R para reiniciar • M para menú</div>
+      </div>
+    </div>
   </div>
   <script>
     // ============================
@@ -64,6 +140,7 @@
     const state = {
       running: true,
       gameOver: false,
+      inMenu: true,
       score: 0,
       highScore: 0,
       highScoreNoticeTime: 0,
@@ -131,6 +208,16 @@
       baseMusicVolume: 0.035,
     };
 
+    const menuScreen = document.getElementById("menu-screen");
+    const gameoverScreen = document.getElementById("gameover-screen");
+    const playButton = document.getElementById("play-button");
+    const musicButton = document.getElementById("music-button");
+    const menuButton = document.getElementById("menu-button");
+    const restartButton = document.getElementById("restart-button");
+    const menuHighScore = document.getElementById("menu-high-score");
+    const menuMusic = document.getElementById("menu-music");
+    const gameoverHighScore = document.getElementById("gameover-high-score");
+
     // Persistent high score storage.
     const HIGH_SCORE_KEY = "infernoInvadersHighScore";
 
@@ -141,6 +228,13 @@
 
     function saveHighScore() {
       localStorage.setItem(HIGH_SCORE_KEY, String(state.highScore));
+    }
+
+    function refreshMenu() {
+      menuHighScore.textContent = `High Score: ${state.highScore}`;
+      menuMusic.textContent = `Music: ${audio.musicEnabled ? "ON" : "OFF"}`;
+      musicButton.textContent = `Music: ${audio.musicEnabled ? "ON" : "OFF"}`;
+      gameoverHighScore.textContent = `High Score: ${state.highScore}`;
     }
 
     function initAudio() {
@@ -244,6 +338,7 @@
       if (audio.musicGain) {
         audio.musicGain.gain.value = audio.musicEnabled ? audio.musicVolume : 0;
       }
+      refreshMenu();
     }
 
     function toggleMute() {
@@ -300,8 +395,33 @@
       resetGrid();
     }
 
+    function showMenu() {
+      state.inMenu = true;
+      state.running = false;
+      state.paused = false;
+      state.gameOver = false;
+      menuScreen.classList.remove("hidden");
+      gameoverScreen.classList.add("hidden");
+      refreshMenu();
+    }
+
+    function startGame() {
+      // Hide the title screen and begin a fresh run.
+      resetGame();
+      state.inMenu = false;
+      menuScreen.classList.add("hidden");
+      gameoverScreen.classList.add("hidden");
+      handleFirstInteraction();
+    }
+
+    function showGameOverMenu() {
+      gameoverScreen.classList.remove("hidden");
+      refreshMenu();
+    }
+
     resetGame();
     loadHighScore();
+    showMenu();
 
     function spawnPlayerShot() {
       const speed = 380;
@@ -369,6 +489,7 @@
         state.gameOver = true;
         state.running = false;
         state.enemyShots = [];
+        showGameOverMenu();
       }
     }
 
@@ -451,6 +572,7 @@
             beep(120, 0.15, "sawtooth", 0.08);
             if (state.lives <= 0) {
               state.running = false;
+              showGameOverMenu();
             }
           }
         }
@@ -526,6 +648,7 @@
       if (state.score > state.highScore) {
         state.highScore = state.score;
         saveHighScore();
+        refreshMenu();
       }
       if (state.highScoreNoticeTime > 0) {
         state.highScoreNoticeTime = Math.max(0, state.highScoreNoticeTime - dt);
@@ -652,6 +775,7 @@
     }
 
     function drawHUD() {
+      if (state.inMenu) return;
       ctx.fillStyle = "rgba(255,255,255,0.85)";
       ctx.font = "16px Trebuchet MS";
       ctx.fillText(`Score: ${state.score}`, 18, 24);
@@ -680,7 +804,7 @@
         ctx.fillText("MUTE", canvas.width - 90, 100);
       }
 
-      if (!state.running) {
+      if (!state.running && !state.inMenu) {
         ctx.fillStyle = "rgba(0,0,0,0.6)";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = "#ffd8d8";
@@ -711,7 +835,7 @@
     }
 
     function drawPauseOverlay() {
-      if (!state.paused || !state.running) return;
+      if (!state.paused || !state.running || state.inMenu) return;
       ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = "#ffd8d8";
@@ -741,7 +865,7 @@
         applyScreenShake(dt);
       }
 
-      if (state.running && !state.paused) {
+      if (state.running && !state.paused && !state.inMenu) {
         updatePlayer(dt);
         updateInvaders(dt);
         checkInvaderGroundCollision();
@@ -775,7 +899,21 @@
     window.addEventListener("keydown", handleFirstInteraction, { once: true });
     window.addEventListener("click", handleFirstInteraction, { once: true });
 
+    playButton.addEventListener("click", startGame);
+    restartButton.addEventListener("click", () => {
+      resetGame();
+      state.inMenu = false;
+      gameoverScreen.classList.add("hidden");
+      handleFirstInteraction();
+    });
+    menuButton.addEventListener("click", showMenu);
+    musicButton.addEventListener("click", toggleMusic);
+
     window.addEventListener("keydown", (event) => {
+      if (state.inMenu && event.code === "Enter") {
+        startGame();
+        return;
+      }
       if (event.code === "ArrowLeft") keys.left = true;
       if (event.code === "ArrowRight") keys.right = true;
       if (event.code === "Space") {
@@ -783,7 +921,14 @@
         initAudio();
       }
       if (event.code === "KeyR") {
-        resetGame();
+        if (!state.running && !state.inMenu) {
+          resetGame();
+          state.inMenu = false;
+          gameoverScreen.classList.add("hidden");
+          handleFirstInteraction();
+        } else {
+          resetGame();
+        }
       }
       if (event.code === "KeyP") {
         if (state.running) {
@@ -791,12 +936,17 @@
         }
       }
       if (event.code === "KeyM") {
-        toggleMute();
+        if (!state.running && !state.inMenu) {
+          showMenu();
+        } else {
+          toggleMute();
+        }
       }
       if (event.code === "KeyH") {
         state.highScore = 0;
         saveHighScore();
         state.highScoreNoticeTime = 1.5;
+        refreshMenu();
       }
     });
 

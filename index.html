@@ -525,16 +525,30 @@
 
       invaderGrid.invaders.forEach((invader) => {
         if (!invader.alive) return;
-        const nextX = invader.x + step;
-        if (nextX > canvas.width - invaderGrid.offsetX || nextX < invaderGrid.offsetX) {
-          shouldDropThisTick = true;
-        }
-      });
-
-      invaderGrid.invaders.forEach((invader) => {
-        if (!invader.alive) return;
         invader.x += step;
       });
+
+      // Clamp overshoot and apply a single drop + direction flip when hitting edges.
+      const alive = invaderGrid.invaders.filter((invader) => invader.alive);
+      if (alive.length) {
+        const minX = Math.min(...alive.map((invader) => invader.x));
+        const maxX = Math.max(...alive.map((invader) => invader.x));
+        const leftLimit = invaderGrid.offsetX;
+        const rightLimit = canvas.width - invaderGrid.offsetX;
+        if (maxX > rightLimit) {
+          const overshoot = maxX - rightLimit;
+          alive.forEach((invader) => {
+            invader.x -= overshoot;
+          });
+          shouldDropThisTick = true;
+        } else if (minX < leftLimit) {
+          const overshoot = leftLimit - minX;
+          alive.forEach((invader) => {
+            invader.x += overshoot;
+          });
+          shouldDropThisTick = true;
+        }
+      }
 
       // Apply the edge drop only once per tick to avoid sudden double drops.
       if (shouldDropThisTick) {

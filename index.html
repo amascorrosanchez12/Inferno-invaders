@@ -22,6 +22,18 @@
       text-align: center;
       color: #f7d6d6;
     }
+    .title {
+      font-size: 28px;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: #ff7b7b;
+      text-shadow: 0 0 12px rgba(255, 80, 80, 0.8);
+    }
+    .subtitle {
+      font-size: 12px;
+      letter-spacing: 0.15em;
+      opacity: 0.7;
+    }
     canvas {
       background: #0b0000;
       border: 2px solid #591313;
@@ -37,8 +49,10 @@
 </head>
 <body>
   <div class="wrap">
+    <div class="title">Inferno Invaders</div>
+    <div class="subtitle">Space to shoot • A/D or ←/→ to move • R restart</div>
     <canvas id="game" width="720" height="540" aria-label="Inferno Invaders"></canvas>
-    <div class="hud">Mover: ⬅️ ➡️ · Disparar: Espacio · Pausa: P · Mute: M · Reiniciar: R</div>
+    <div class="hud">Mover: ⬅️ ➡️ · Disparar: Espacio · Pausa: P · Mute: M · High Score: H · Reiniciar: R</div>
   </div>
   <script>
     // ============================
@@ -51,6 +65,8 @@
       running: true,
       gameOver: false,
       score: 0,
+      highScore: 0,
+      highScoreNoticeTime: 0,
       lives: 3,
       level: 1,
       paused: false,
@@ -114,6 +130,18 @@
       sfxGain: null,
       baseMusicVolume: 0.035,
     };
+
+    // Persistent high score storage.
+    const HIGH_SCORE_KEY = "infernoInvadersHighScore";
+
+    function loadHighScore() {
+      const stored = Number(localStorage.getItem(HIGH_SCORE_KEY));
+      state.highScore = Number.isFinite(stored) ? stored : 0;
+    }
+
+    function saveHighScore() {
+      localStorage.setItem(HIGH_SCORE_KEY, String(state.highScore));
+    }
 
     function initAudio() {
       if (!audio.ctx) {
@@ -255,6 +283,7 @@
       state.gameOver = false;
       state.paused = false;
       state.score = 0;
+      state.highScoreNoticeTime = 0;
       state.lives = 3;
       state.level = 1;
       state.enemyShots = [];
@@ -272,6 +301,7 @@
     }
 
     resetGame();
+    loadHighScore();
 
     function spawnPlayerShot() {
       const speed = 380;
@@ -492,6 +522,16 @@
       });
     }
 
+    function updateHighScore(dt) {
+      if (state.score > state.highScore) {
+        state.highScore = state.score;
+        saveHighScore();
+      }
+      if (state.highScoreNoticeTime > 0) {
+        state.highScoreNoticeTime = Math.max(0, state.highScoreNoticeTime - dt);
+      }
+    }
+
     function drawBackground(dt) {
       state.backgroundPulse += dt * 1.4;
       const glow = 0.12 + Math.sin(state.backgroundPulse) * 0.05;
@@ -615,7 +655,8 @@
       ctx.fillStyle = "rgba(255,255,255,0.85)";
       ctx.font = "16px Trebuchet MS";
       ctx.fillText(`Score: ${state.score}`, 18, 24);
-      ctx.fillText(`Lives: ${state.lives}`, 18, 44);
+      ctx.fillText(`High: ${state.highScore}`, 18, 44);
+      ctx.fillText(`Lives: ${state.lives}`, 18, 64);
       ctx.fillText(`Level: ${state.level}`, canvas.width - 110, 24);
       ctx.fillText(`Music: ${audio.musicEnabled ? "ON" : "OFF"}`, canvas.width - 170, 44);
       const audioState = audio.ctx ? audio.ctx.state : "suspended";
@@ -623,9 +664,13 @@
 
       ctx.fillStyle = "rgba(255,255,255,0.75)";
       const timers = state.powerTimers;
-      ctx.fillText(`Rapid: ${timers.rapid.toFixed(1)}s`, 18, 64);
-      ctx.fillText(`Shield: ${timers.shield.toFixed(1)}s`, 18, 82);
-      ctx.fillText(`Spread: ${timers.spread.toFixed(1)}s`, 18, 100);
+      ctx.fillText(`Rapid: ${timers.rapid.toFixed(1)}s`, 18, 84);
+      ctx.fillText(`Shield: ${timers.shield.toFixed(1)}s`, 18, 102);
+      ctx.fillText(`Spread: ${timers.spread.toFixed(1)}s`, 18, 120);
+      if (state.highScoreNoticeTime > 0) {
+        ctx.fillStyle = "rgba(255,255,255,0.75)";
+        ctx.fillText("High score reset", 18, 140);
+      }
 
       ctx.fillStyle = "rgba(255,255,255,0.7)";
       if (state.paused) {
@@ -648,8 +693,18 @@
             canvas.width / 2 - 130,
             canvas.height / 2 + 22
           );
+          ctx.fillText(
+            `High Score: ${state.highScore}`,
+            canvas.width / 2 - 80,
+            canvas.height / 2 + 42
+          );
           ctx.fillText("Pulsa R para reiniciar", canvas.width / 2 - 95, canvas.height / 2 + 45);
         } else {
+          ctx.fillText(
+            `High Score: ${state.highScore}`,
+            canvas.width / 2 - 80,
+            canvas.height / 2 + 20
+          );
           ctx.fillText("Pulsa R para reiniciar", canvas.width / 2 - 95, canvas.height / 2 + 30);
         }
       }
@@ -694,6 +749,7 @@
         updatePowerUps(dt);
         updateParticles(dt);
         updatePowerTimers(dt);
+        updateHighScore(dt);
         handleCollisions();
         advanceLevelIfNeeded();
       }
@@ -736,6 +792,11 @@
       }
       if (event.code === "KeyM") {
         toggleMute();
+      }
+      if (event.code === "KeyH") {
+        state.highScore = 0;
+        saveHighScore();
+        state.highScoreNoticeTime = 1.5;
       }
     });
 

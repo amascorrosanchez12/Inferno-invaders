@@ -259,8 +259,8 @@
       nextNoteTime: 0,
       lookahead: 0.1,
       schedulerInterval: 25,
-      musicVolume: 0.25, // Default music gain (tweakable).
-      masterVolume: 0.85, // Master safety gain to avoid clipping.
+      musicVolume: 0.3, // Default music gain (tweakable).
+      masterVolume: 0.9, // Master safety gain to avoid clipping.
       musicGain: null,
       sfxGain: null,
       baseMusicVolume: 0.035,
@@ -315,7 +315,7 @@
       menuHighScore.textContent = `High Score: ${state.highScore}`;
       menuMusic.textContent = `Music: ${audio.musicEnabled ? "ON" : "OFF"}`;
       musicButton.textContent = `Music: ${audio.musicEnabled ? "ON" : "OFF"}`;
-      menuMusicVol.textContent = `Music Vol: ${audio.musicVolume <= 0.2 ? "LOW" : audio.musicVolume <= 0.27 ? "MID" : "HIGH"}`;
+      menuMusicVol.textContent = `Music Vol: ${audio.musicVolume <= 0.24 ? "LOW" : audio.musicVolume <= 0.33 ? "MID" : "HIGH"}`;
       gameoverHighScore.textContent = `High Score: ${state.highScore}`;
     }
 
@@ -357,14 +357,14 @@
         audio.sfxGain = audio.ctx.createGain();
         audio.masterGain.gain.value = audio.masterVolume;
         audio.musicGain.gain.value = audio.musicEnabled ? audio.musicVolume : 0;
-        audio.sfxGain.gain.value = 0.1;
+        audio.sfxGain.gain.value = 0.2;
         audio.musicGain.connect(audio.masterGain);
         audio.sfxGain.connect(audio.masterGain);
         audio.masterGain.connect(audio.ctx.destination);
       }
     }
 
-    function beep(frequency, duration, type = "sine", volume = 0.05) {
+    function beep(frequency, duration, type = "sine", volume = 0.07) {
       if (!audio.enabled || audio.muted) return;
       initAudio();
       const now = audio.ctx.currentTime;
@@ -379,7 +379,7 @@
       // Duck music briefly when SFX plays
       if (audio.musicGain && !audio.muted) {
         audio.musicGain.gain.cancelScheduledValues(now);
-        audio.musicGain.gain.setTargetAtTime(audio.musicVolume * 0.75, now, 0.02);
+        audio.musicGain.gain.setTargetAtTime(audio.musicVolume * 0.85, now, 0.02);
         audio.musicGain.gain.setTargetAtTime(audio.musicEnabled ? audio.musicVolume : 0, now + duration, 0.15);
       }
     }
@@ -868,24 +868,16 @@
     function drawInvader(invader) {
       ctx.save();
       ctx.translate(invader.x, invader.y);
-      ctx.fillStyle = "#e9d1d1";
-      ctx.beginPath();
-      ctx.arc(0, 0, 16, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "#4b0000";
-      ctx.beginPath();
-      ctx.arc(-5, -2, 3, 0, Math.PI * 2);
-      ctx.arc(6, -2, 3, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.strokeStyle = "#4b0000";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(-6, 6);
-      ctx.lineTo(6, 6);
-      ctx.stroke();
-
+      // Draw invaders as a centered devil emoji; fallback to text if emoji fails.
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "28px \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\", sans-serif";
+      ctx.fillText("😈", 0, 0);
+      if (!ctx.measureText("😈").width) {
+        ctx.fillStyle = "#e9d1d1";
+        ctx.font = "16px Trebuchet MS";
+        ctx.fillText("DEVIL", 0, 0);
+      }
       ctx.restore();
     }
 
@@ -1062,9 +1054,9 @@
     mobileControls.querySelectorAll("[data-action]").forEach(bindMobileButton);
 
     playButton.addEventListener("click", startGame);
-    musicVolLow.addEventListener("click", () => setMusicVolume(0.18));
-    musicVolMid.addEventListener("click", () => setMusicVolume(0.25));
-    musicVolHigh.addEventListener("click", () => setMusicVolume(0.32));
+    musicVolLow.addEventListener("click", () => setMusicVolume(0.24));
+    musicVolMid.addEventListener("click", () => setMusicVolume(0.3));
+    musicVolHigh.addEventListener("click", () => setMusicVolume(0.36));
     restartButton.addEventListener("click", () => {
       resetGame();
       state.inMenu = false;

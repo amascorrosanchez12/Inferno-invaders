@@ -133,7 +133,7 @@
       margin: 0 auto;
       touch-action: none;
       position: relative;
-      z-index: 5;
+      z-index: 15;
     }
     .mobile-controls-main {
       display: grid;
@@ -187,6 +187,45 @@
     }
     .hidden {
       display: none !important;
+    }
+    .portrait-touch .wrap {
+      width: 100%;
+      max-width: 100vw;
+      justify-items: center;
+    }
+    .portrait-touch canvas {
+      width: 100vw;
+      height: auto;
+      max-width: 100vw;
+    }
+    .portrait-touch .mobile-controls {
+      position: fixed;
+      bottom: 14px;
+      left: 12px;
+      right: 12px;
+      width: auto;
+      margin: 0;
+      z-index: 30;
+      pointer-events: none;
+    }
+    .portrait-touch .mobile-controls-main {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      pointer-events: auto;
+    }
+    .portrait-touch .mobile-controls-main [data-action="right"] {
+      margin-right: auto;
+    }
+    .portrait-touch .mobile-controls-aux {
+      position: fixed;
+      right: 12px;
+      top: 34%;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 31;
+      pointer-events: auto;
     }
   </style>
 </head>
@@ -256,8 +295,24 @@
     const BASE_HEIGHT = 540;
     let touchControlsInitialized = false;
 
+    function isPortraitTouch() {
+      const portrait = window.matchMedia && window.matchMedia("(orientation: portrait)").matches;
+      return isTouchDevice() && portrait;
+    }
+
+    function updatePortraitLayout() {
+      document.body.classList.toggle("portrait-touch", isPortraitTouch());
+    }
+
     function resizeCanvas() {
-      const scale = Math.min(window.innerWidth / BASE_WIDTH, window.innerHeight / BASE_HEIGHT);
+      const portraitTouch = isPortraitTouch();
+      let scale = Math.min(window.innerWidth / BASE_WIDTH, window.innerHeight / BASE_HEIGHT);
+      if (portraitTouch) {
+        scale = window.innerWidth / BASE_WIDTH;
+        if (BASE_HEIGHT * scale > window.innerHeight) {
+          scale = window.innerHeight / BASE_HEIGHT;
+        }
+      }
       canvas.style.width = `${Math.floor(BASE_WIDTH * scale)}px`;
       canvas.style.height = `${Math.floor(BASE_HEIGHT * scale)}px`;
     }
@@ -1013,11 +1068,13 @@
       applyTranslations();
       showMenu();
       ensureTouchControls();
+      updatePortraitLayout();
     }
 
     init();
     resizeCanvas();
     window.addEventListener("resize", () => {
+      updatePortraitLayout();
       resizeCanvas();
       updateControlHints();
     });

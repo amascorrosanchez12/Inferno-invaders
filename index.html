@@ -174,6 +174,7 @@
       border: 1px solid #7a1f1f;
       border-radius: 10px;
       color: #ffdada;
+      --btn-scale: 1;
       padding: 14px 8px;
       font-size: 12px;
       letter-spacing: 0.12em;
@@ -183,6 +184,7 @@
         inset 0 0 8px rgba(255, 140, 90, 0.35);
       touch-action: none;
       user-select: none;
+      transform: scale(var(--btn-scale));
       transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
     }
     .mobile-btn--shoot {
@@ -196,7 +198,7 @@
       opacity: 0.9;
     }
     .mobile-btn.is-pressed {
-      transform: scale(0.96);
+      transform: scale(calc(var(--btn-scale) * 0.96));
       filter: brightness(1.15);
       box-shadow:
         0 0 16px rgba(255, 120, 80, 0.65),
@@ -304,8 +306,10 @@
       mobileControls.style.transform = `scale(${uiScale})`;
       const mainControls = mobileControls.querySelector(".mobile-controls-main");
       const auxControls = mobileControls.querySelector(".mobile-controls-aux");
+      const leftButton = mobileControls.querySelector('[data-action="left"]');
+      const rightButton = mobileControls.querySelector('[data-action="right"]');
       if (mainControls) {
-        const bottom = Math.max(pad, pad + safeBottom);
+        const bottom = Math.max(pad, pad + safeBottom) + 24;
         mainControls.style.left = `${pad}px`;
         mainControls.style.right = `${pad}px`;
         mainControls.style.bottom = `${bottom}px`;
@@ -314,6 +318,12 @@
         auxControls.style.right = `${pad}px`;
         auxControls.style.top = `${pad + 80}px`;
         auxControls.style.gap = "8px";
+      }
+      if (leftButton) {
+        leftButton.style.setProperty("--btn-scale", "0.85");
+      }
+      if (rightButton) {
+        rightButton.style.setProperty("--btn-scale", "0.85");
       }
     }
 

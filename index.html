@@ -969,9 +969,7 @@
     }
 
     function restartGame() {
-      state.paused = false;
-      updatePauseButtonLabel();
-      updateControlHints();
+      setPaused(false);
       if (!state.running && !state.inMenu) {
         resetGame();
         state.inMenu = false;
@@ -984,10 +982,14 @@
 
     function togglePause() {
       if (state.running) {
-        state.paused = !state.paused;
-        updatePauseButtonLabel();
-        updateControlHints();
+        setPaused(!state.paused);
       }
+    }
+
+    function setPaused(value) {
+      state.paused = value;
+      updatePauseButtonLabel();
+      updateControlHints();
     }
 
     function handleMuteAction() {

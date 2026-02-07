@@ -1,11 +1,11 @@
-const CACHE_NAME = "inferno-invaders-v1";
+const CACHE_NAME = "inferno-invaders-v1.1";
 const PRECACHE_URLS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./sw.js",
-  "./icons/icon.svg",
-  "./icons/icon-512.svg",
+  "./IF_icon_1.jpg",
+  "./IF_icon_2.jpg",
 ];
 
 self.addEventListener("install", (event) => {

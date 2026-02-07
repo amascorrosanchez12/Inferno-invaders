@@ -1,0 +1,1755 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Inferno Invaders</title>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+    body {
+      margin: 0;
+      background: #050000;
+      font-family: "Trebuchet MS", system-ui, sans-serif;
+      display: grid;
+      place-items: center;
+      min-height: 100vh;
+      overscroll-behavior: none;
+    }
+    .wrap {
+      display: grid;
+      gap: 12px;
+      text-align: center;
+      color: #f7d6d6;
+      position: relative;
+    }
+    .title {
+      font-size: 28px;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: #ff7b7b;
+      text-shadow: 0 0 12px rgba(255, 80, 80, 0.8);
+    }
+    .subtitle {
+      font-size: 12px;
+      letter-spacing: 0.15em;
+      opacity: 0.7;
+    }
+    .screen {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: rgba(0, 0, 0, 0.7);
+      border: 2px solid rgba(130, 20, 20, 0.7);
+      box-shadow: 0 0 18px rgba(255, 80, 80, 0.4);
+    }
+    .screen.hidden {
+      display: none;
+    }
+    .screen-card {
+      display: grid;
+      gap: 12px;
+      padding: 24px 28px;
+      background: rgba(20, 0, 0, 0.9);
+      border: 1px solid rgba(130, 20, 20, 0.8);
+      box-shadow: 0 0 18px rgba(255, 80, 80, 0.45);
+      color: #ffd4d4;
+    }
+    .screen-title {
+      font-size: 36px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      text-shadow: 0 0 16px rgba(255, 100, 100, 0.8);
+    }
+    .screen-subtitle {
+      font-size: 13px;
+      opacity: 0.8;
+      letter-spacing: 0.12em;
+    }
+    .screen-actions {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .stats {
+      display: grid;
+      gap: 4px;
+      font-size: 12px;
+      opacity: 0.85;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .screen-row {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .screen button {
+      background: #3a0b0b;
+      color: #ffdada;
+      border: 1px solid #8a2b2b;
+      padding: 8px 16px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      box-shadow: 0 0 12px rgba(255, 80, 80, 0.3);
+    }
+    .screen button:hover {
+      background: #541010;
+    }
+    canvas {
+      background: #0b0000;
+      border: 2px solid #591313;
+      box-shadow: 0 0 25px rgba(255, 80, 80, 0.4);
+      image-rendering: pixelated;
+      width: min(92vw, 720px);
+      height: auto;
+      touch-action: none;
+    }
+    .hud {
+      font-size: 14px;
+      letter-spacing: 0.04em;
+      opacity: 0.8;
+    }
+    .mobile-controls {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(72px, 1fr));
+      gap: 10px;
+      width: min(92vw, 520px);
+      margin: 0 auto;
+      touch-action: none;
+    }
+    .mobile-controls.hidden {
+      display: none;
+    }
+    .mobile-btn {
+      background: radial-gradient(circle at top, rgba(255, 120, 80, 0.35), rgba(60, 10, 10, 0.9));
+      border: 1px solid #7a1f1f;
+      border-radius: 10px;
+      color: #ffdada;
+      padding: 14px 8px;
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      box-shadow:
+        0 0 10px rgba(255, 80, 80, 0.45),
+        inset 0 0 8px rgba(255, 140, 90, 0.35);
+      touch-action: none;
+      user-select: none;
+      transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+    }
+    .mobile-btn.is-pressed {
+      transform: scale(0.96);
+      filter: brightness(1.15);
+      box-shadow:
+        0 0 16px rgba(255, 120, 80, 0.65),
+        inset 0 0 12px rgba(255, 160, 110, 0.5);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div id="game-title" class="title">Inferno Invaders</div>
+    <div id="game-subtitle" class="subtitle">Space to shoot • A/D or ←/→ to move • R restart</div>
+    <canvas id="game" width="720" height="540" aria-label="Inferno Invaders"></canvas>
+    <div id="mobile-controls" class="mobile-controls hidden" aria-label="Controles táctiles">
+      <button class="mobile-btn" data-action="left" type="button">←</button>
+      <button class="mobile-btn" data-action="shoot" type="button">✦</button>
+      <button class="mobile-btn" data-action="right" type="button">→</button>
+    </div>
+    <div id="hud-controls" class="hud">Mover: ⬅️ ➡️ · Disparar: Espacio · Pausa: P · Mute: M · High Score: H · Reiniciar: R</div>
+    <div id="menu-screen" class="screen">
+      <div class="screen-card">
+        <div id="menu-title" class="screen-title">Inferno Invaders</div>
+        <div id="menu-subtitle" class="screen-subtitle">A/D o ←/→ para moverte • Espacio para disparar</div>
+        <div id="menu-high-score">High Score: 0</div>
+        <div id="menu-stats" class="stats">Runs: 0 · Kills: 0 · Best Level: 1</div>
+        <div id="menu-music">Music: ON</div>
+        <div id="menu-music-vol">Music Vol: MID</div>
+        <div id="menu-crt">CRT: OFF</div>
+        <div class="screen-actions">
+          <button id="play-button" type="button">Jugar</button>
+          <button id="music-button" type="button">Music: ON/OFF</button>
+          <button id="crt-button" type="button">CRT: ON/OFF</button>
+          <button id="lang-button" type="button">Idioma: ES</button>
+        </div>
+        <div class="screen-row">
+          <button id="music-vol-low" type="button">LOW</button>
+          <button id="music-vol-mid" type="button">MID</button>
+          <button id="music-vol-high" type="button">HIGH</button>
+        </div>
+        <div id="menu-stats-reset" class="screen-subtitle">Enter para iniciar • X para reset stats</div>
+        <div id="menu-lang-notice" class="screen-subtitle"></div>
+      </div>
+    </div>
+    <div id="gameover-screen" class="screen hidden">
+      <div class="screen-card">
+        <div id="gameover-title" class="screen-title">Game Over</div>
+        <div id="gameover-high-score">High Score: 0</div>
+        <div class="screen-actions">
+          <button id="restart-button" type="button">Reiniciar</button>
+          <button id="menu-button" type="button">Volver al menú</button>
+        </div>
+        <div id="gameover-subtitle" class="screen-subtitle">R para reiniciar • M para menú</div>
+      </div>
+    </div>
+  </div>
+  <script>
+    // ============================
+    // Inferno Invaders (Canvas)
+    // ============================
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+
+    const i18n = {
+      es: {
+        title: "Inferno Invaders",
+        subtitle: "Dispara: Espacio • Mover: A/D o ←/→ • Reiniciar: R",
+        hudControls: "Mover: ⬅️ ➡️ · Disparar: Espacio · Pausa: P · Mute: M · High Score: H · Reiniciar: R",
+        menuSubtitle: "A/D o ←/→ para moverte • Espacio para disparar",
+        play: "Jugar",
+        music: "Música",
+        musicToggle: "Música: {state}",
+        crtToggle: "CRT: {state}",
+        musicVol: "Vol música: {level}",
+        on: "ON",
+        off: "OFF",
+        low: "BAJO",
+        mid: "MEDIO",
+        high: "ALTO",
+        language: "Idioma",
+        languageNotice: "Idioma: Español",
+        statsLine: "Partidas: {runs} · Bajas: {kills} · Mejor nivel: {bestLevel}",
+        statsReset: "Stats reiniciadas",
+        statsResetHint: "Enter para iniciar • X para reset stats",
+        highScoreReset: "High score reiniciado",
+        gameOver: "GAME OVER",
+        invadersReached: "Invasores llegaron al fondo",
+        pressRestart: "Pulsa R para reiniciar",
+        pressMenu: "R para reiniciar • M para menú",
+        pressResume: "Pulsa P para continuar",
+        bossIncoming: "BOSS INCOMING",
+        bossDefeated: "BOSS DEFEATED",
+        boss: "BOSS",
+        score: "Puntaje",
+        lives: "Vidas",
+        level: "Nivel",
+        highScore: "Puntaje Máximo",
+        audio: "AUDIO",
+        audioOk: "OK",
+        audioLocked: "BLOQ",
+        paused: "PAUSA",
+        mute: "MUTE",
+        statsResetHud: "Stats reiniciadas",
+        bossIncomingNotice: "BOSS INCOMING",
+        bossDefeatedNotice: "BOSS DEFEATED",
+        devil: "DEVIL",
+        crtPause: "CRT: {state} (C)",
+        menu: "Menú",
+        restart: "Reiniciar",
+      },
+      en: {
+        title: "Inferno Invaders",
+        subtitle: "Shoot: Space • Move: A/D or ←/→ • Restart: R",
+        hudControls: "Move: ⬅️ ➡️ · Shoot: Space · Pause: P · Mute: M · High Score: H · Restart: R",
+        menuSubtitle: "A/D or ←/→ to move • Space to shoot",
+        play: "Play",
+        music: "Music",
+        musicToggle: "Music: {state}",
+        crtToggle: "CRT: {state}",
+        musicVol: "Music Vol: {level}",
+        on: "ON",
+        off: "OFF",
+        low: "LOW",
+        mid: "MID",
+        high: "HIGH",
+        language: "Language",
+        languageNotice: "Language: English",
+        statsLine: "Runs: {runs} · Kills: {kills} · Best Level: {bestLevel}",
+        statsReset: "Stats reset",
+        statsResetHint: "Press Enter to start • X to reset stats",
+        highScoreReset: "High score reset",
+        gameOver: "GAME OVER",
+        invadersReached: "Invaders reached the ground",
+        pressRestart: "Press R to restart",
+        pressMenu: "R to restart • M for menu",
+        pressResume: "Press P to resume",
+        bossIncoming: "BOSS INCOMING",
+        bossDefeated: "BOSS DEFEATED",
+        boss: "BOSS",
+        score: "Score",
+        lives: "Lives",
+        level: "Level",
+        highScore: "High Score",
+        audio: "AUDIO",
+        audioOk: "OK",
+        audioLocked: "LOCKED",
+        paused: "PAUSED",
+        mute: "MUTE",
+        statsResetHud: "Stats reset",
+        bossIncomingNotice: "BOSS INCOMING",
+        bossDefeatedNotice: "BOSS DEFEATED",
+        devil: "DEVIL",
+        crtPause: "CRT: {state} (C)",
+        menu: "Menu",
+        restart: "Restart",
+      },
+    };
+
+    let lang = "es";
+
+    function t(key) {
+      return (i18n[lang] && i18n[lang][key]) || i18n.es[key] || key;
+    }
+
+    function tf(key, vars = {}) {
+      let text = t(key);
+      Object.entries(vars).forEach(([name, value]) => {
+        text = text.replace(`{${name}}`, value);
+      });
+      return text;
+    }
+
+    const state = {
+      running: true,
+      gameOver: false,
+      inMenu: true,
+      score: 0,
+      highScore: 0,
+      highScoreNoticeTime: 0,
+      lives: 3,
+      level: 1,
+      paused: false,
+      debugOverlay: true,
+      crtEnabled: false,
+      bossActive: false,
+      bossIncomingTime: 0,
+      bossDefeatedTime: 0,
+      bossLaser: null,
+      bossPattern: "laser",
+      bossPatternTimer: 0,
+      bossRainTimer: 0,
+      bossShots: [],
+      bossHitFlash: 0,
+      bossLaserFired: false,
+      statsNoticeTime: 0,
+      langNoticeTime: 0,
+      stats: {
+        runs: 0,
+        kills: 0,
+        bestLevel: 1,
+      },
+      shakeTime: 0,
+      backgroundPulse: 0,
+      lastTime: 0,
+      enemyShots: [],
+      playerShots: [],
+      powerUps: [], // Falling bonuses dropped by invaders
+      particles: [], // Small embers for feedback
+      powerUpDropCooldown: 0,
+      powerTimers: {
+        rapid: 0,
+        shield: 0,
+        spread: 0,
+      },
+    };
+
+    const keys = {
+      left: false,
+      right: false,
+      shoot: false,
+    };
+
+    const player = {
+      x: canvas.width / 2,
+      y: canvas.height - 60,
+      radius: 18,
+      speed: 260,
+      cooldown: 0,
+    };
+
+    const boss = {
+      x: canvas.width / 2,
+      y: 90,
+      size: 72,
+      hp: 0,
+      maxHp: 0,
+      wobble: 0,
+    };
+
+    const invaderGrid = {
+      rows: 4,
+      cols: 8,
+      spacingX: 64,
+      spacingY: 52,
+      offsetX: 80,
+      offsetY: 70,
+      direction: 1,
+      speed: 32,
+      drop: 18,
+      invaders: [],
+    };
+
+    // Audio context for simple beeps (no external assets)
+    const audio = {
+      ctx: null,
+      masterGain: null,
+      enabled: true,
+      muted: false,
+      musicEnabled: true,
+      musicPlaying: false,
+      musicStarted: false,
+      musicTimer: null,
+      musicVoices: [],
+      nextNoteTime: 0,
+      lookahead: 0.1,
+      schedulerInterval: 25,
+      musicVolume: 0.35, // Default music gain (tweakable).
+      masterVolume: 0.9, // Master safety gain to avoid clipping.
+      musicGain: null,
+      sfxGain: null,
+      baseMusicVolume: 0.035,
+    };
+
+    const menuScreen = document.getElementById("menu-screen");
+    const gameoverScreen = document.getElementById("gameover-screen");
+    const playButton = document.getElementById("play-button");
+    const musicButton = document.getElementById("music-button");
+    const menuButton = document.getElementById("menu-button");
+    const restartButton = document.getElementById("restart-button");
+    const menuHighScore = document.getElementById("menu-high-score");
+    const menuStats = document.getElementById("menu-stats");
+    const menuMusic = document.getElementById("menu-music");
+    const menuMusicVol = document.getElementById("menu-music-vol");
+    const menuCrt = document.getElementById("menu-crt");
+    const menuLangNotice = document.getElementById("menu-lang-notice");
+    const gameoverHighScore = document.getElementById("gameover-high-score");
+    const mobileControls = document.getElementById("mobile-controls");
+    const musicVolLow = document.getElementById("music-vol-low");
+    const musicVolMid = document.getElementById("music-vol-mid");
+    const musicVolHigh = document.getElementById("music-vol-high");
+    const crtButton = document.getElementById("crt-button");
+    const langButton = document.getElementById("lang-button");
+    const gameTitle = document.getElementById("game-title");
+    const gameSubtitle = document.getElementById("game-subtitle");
+    const hudControls = document.getElementById("hud-controls");
+    const menuTitle = document.getElementById("menu-title");
+    const menuSubtitle = document.getElementById("menu-subtitle");
+    const menuStatsReset = document.getElementById("menu-stats-reset");
+    const gameoverTitle = document.getElementById("gameover-title");
+    const gameoverSubtitle = document.getElementById("gameover-subtitle");
+
+    // Persistent high score storage.
+    const HIGH_SCORE_KEY = "infernoInvadersHighScore";
+    const MUSIC_ON_KEY = "infernoInvadersMusicOn";
+    const MUSIC_VOL_KEY = "infernoInvadersMusicVol";
+    const CRT_ON_KEY = "infernoInvadersCrtOn";
+    const RUNS_KEY = "infernoInvadersRuns";
+    const KILLS_KEY = "infernoInvadersKills";
+    const BEST_LEVEL_KEY = "infernoInvadersBestLevel";
+    const LANG_KEY = "infernoInvadersLang";
+
+    function loadLang() {
+      const storedLang = localStorage.getItem(LANG_KEY);
+      if (storedLang === "en" || storedLang === "es") {
+        lang = storedLang;
+      }
+    }
+
+    function saveLang() {
+      localStorage.setItem(LANG_KEY, lang);
+    }
+
+    function loadMusicSettings() {
+      const storedOn = localStorage.getItem(MUSIC_ON_KEY);
+      if (storedOn !== null) {
+        audio.musicEnabled = storedOn === "true";
+      }
+      const storedVol = Number(localStorage.getItem(MUSIC_VOL_KEY));
+      if (Number.isFinite(storedVol)) {
+        audio.musicVolume = storedVol;
+      }
+      const storedCrt = localStorage.getItem(CRT_ON_KEY);
+      if (storedCrt !== null) {
+        state.crtEnabled = storedCrt === "true";
+      }
+    }
+
+    function saveMusicSettings() {
+      localStorage.setItem(MUSIC_ON_KEY, String(audio.musicEnabled));
+      localStorage.setItem(MUSIC_VOL_KEY, String(audio.musicVolume));
+      localStorage.setItem(CRT_ON_KEY, String(state.crtEnabled));
+    }
+
+    function applyTranslations() {
+      gameTitle.textContent = t("title");
+      gameSubtitle.textContent = t("subtitle");
+      hudControls.textContent = t("hudControls");
+      menuTitle.textContent = t("title");
+      menuSubtitle.textContent = t("menuSubtitle");
+      playButton.textContent = t("play");
+      menuButton.textContent = t("menu");
+      restartButton.textContent = t("restart");
+      gameoverTitle.textContent = t("gameOver");
+      gameoverSubtitle.textContent = t("pressMenu");
+      langButton.textContent = `${t("language")}: ${lang.toUpperCase()}`;
+      musicVolLow.textContent = t("low");
+      musicVolMid.textContent = t("mid");
+      musicVolHigh.textContent = t("high");
+    }
+
+    function toggleLang() {
+      lang = lang === "es" ? "en" : "es";
+      saveLang();
+      state.langNoticeTime = 1.5;
+      applyTranslations();
+      refreshMenu();
+    }
+
+    function loadStats() {
+      const runs = Number(localStorage.getItem(RUNS_KEY));
+      const kills = Number(localStorage.getItem(KILLS_KEY));
+      const bestLevel = Number(localStorage.getItem(BEST_LEVEL_KEY));
+      state.stats.runs = Number.isFinite(runs) ? runs : 0;
+      state.stats.kills = Number.isFinite(kills) ? kills : 0;
+      state.stats.bestLevel = Number.isFinite(bestLevel) ? bestLevel : 1;
+    }
+
+    function saveStats() {
+      localStorage.setItem(RUNS_KEY, String(state.stats.runs));
+      localStorage.setItem(KILLS_KEY, String(state.stats.kills));
+      localStorage.setItem(BEST_LEVEL_KEY, String(state.stats.bestLevel));
+    }
+
+    function loadHighScore() {
+      const stored = Number(localStorage.getItem(HIGH_SCORE_KEY));
+      state.highScore = Number.isFinite(stored) ? stored : 0;
+    }
+
+    function saveHighScore() {
+      localStorage.setItem(HIGH_SCORE_KEY, String(state.highScore));
+    }
+
+    function refreshMenu() {
+      menuHighScore.textContent = `${t("highScore")}: ${state.highScore}`;
+      menuStats.textContent = tf("statsLine", {
+        runs: state.stats.runs,
+        kills: state.stats.kills,
+        bestLevel: state.stats.bestLevel,
+      });
+      menuMusic.textContent = tf("musicToggle", { state: audio.musicEnabled ? t("on") : t("off") });
+      musicButton.textContent = tf("musicToggle", { state: audio.musicEnabled ? t("on") : t("off") });
+      menuMusicVol.textContent = tf("musicVol", {
+        level: audio.musicVolume <= 0.2 ? t("low") : audio.musicVolume <= 0.45 ? t("mid") : t("high"),
+      });
+      menuCrt.textContent = tf("crtToggle", { state: state.crtEnabled ? t("on") : t("off") });
+      gameoverHighScore.textContent = `${t("highScore")}: ${state.highScore}`;
+      const resetNote =
+        state.statsNoticeTime > 0 ? t("statsReset") : t("statsResetHint");
+      if (menuStatsReset) menuStatsReset.textContent = resetNote;
+      if (menuLangNotice) {
+        menuLangNotice.textContent = state.langNoticeTime > 0 ? t("languageNotice") : "";
+      }
+      langButton.textContent = `${t("language")}: ${lang.toUpperCase()}`;
+    }
+
+    function setMobileControl(action, pressed) {
+      if (action === "left") keys.left = pressed;
+      if (action === "right") keys.right = pressed;
+      if (action === "shoot") keys.shoot = pressed;
+    }
+
+    function bindMobileButton(button) {
+      const action = button.dataset.action;
+      const press = (event) => {
+        event.preventDefault();
+        setMobileControl(action, true);
+        button.classList.add("is-pressed");
+      };
+      const release = (event) => {
+        event.preventDefault();
+        setMobileControl(action, false);
+        button.classList.remove("is-pressed");
+      };
+      button.addEventListener("pointerdown", (event) => {
+        press(event);
+        button.setPointerCapture(event.pointerId);
+      });
+      button.addEventListener("pointerup", release);
+      button.addEventListener("pointercancel", release);
+      button.addEventListener("pointerleave", release);
+      button.addEventListener("touchstart", press, { passive: false });
+      button.addEventListener("touchend", release, { passive: false });
+      button.addEventListener("touchcancel", release, { passive: false });
+    }
+
+    function initAudio() {
+      if (!audio.ctx) {
+        audio.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        audio.masterGain = audio.ctx.createGain();
+        audio.musicGain = audio.ctx.createGain();
+        audio.sfxGain = audio.ctx.createGain();
+        audio.masterGain.gain.value = audio.masterVolume;
+        audio.musicGain.gain.value = audio.musicEnabled ? audio.musicVolume : 0;
+        audio.sfxGain.gain.value = 0.7;
+        audio.musicGain.connect(audio.masterGain);
+        audio.sfxGain.connect(audio.masterGain);
+        audio.masterGain.connect(audio.ctx.destination);
+      }
+    }
+
+    function beep(frequency, duration, type = "sine", volume = 0.12) {
+      if (!audio.enabled || audio.muted) return;
+      initAudio();
+      const now = audio.ctx.currentTime;
+      const oscillator = audio.ctx.createOscillator();
+      const gain = audio.ctx.createGain();
+      oscillator.type = type;
+      oscillator.frequency.value = frequency;
+      gain.gain.value = volume;
+      oscillator.connect(gain).connect(audio.sfxGain);
+      oscillator.start(now);
+      oscillator.stop(now + duration);
+      // Duck music briefly when SFX plays (short + subtle to preserve loudness).
+      if (audio.musicGain && !audio.muted) {
+        audio.musicGain.gain.cancelScheduledValues(now);
+        audio.musicGain.gain.setTargetAtTime(audio.musicVolume * 0.95, now, 0.02);
+        audio.musicGain.gain.setTargetAtTime(audio.musicEnabled ? audio.musicVolume : 0, now + 0.2, 0.08);
+      }
+    }
+
+    function scheduleMusic(time) {
+      // Procedural notes scheduled slightly ahead for stable timing.
+      const tempo = 80 + state.level * 6 + (state.bossActive ? 18 : 0);
+      const beatDuration = 60 / tempo;
+      const notes = [110, 165, 196, 220, 196, 165];
+      const tone = notes[Math.floor(Math.random() * notes.length)];
+      const bossPitch = state.bossActive ? 1.12 : 1;
+      const bass = audio.musicVoices[0];
+      const pad = audio.musicVoices[1];
+      if (bass && pad) {
+        bass.osc.frequency.setValueAtTime(tone * bossPitch, time);
+        bass.gain.gain.setValueAtTime(0.08, time);
+        bass.gain.gain.exponentialRampToValueAtTime(0.001, time + beatDuration * 0.95);
+        pad.osc.frequency.setValueAtTime(tone * 2 * bossPitch, time);
+        pad.gain.gain.setValueAtTime(0.04, time);
+        pad.gain.gain.exponentialRampToValueAtTime(0.001, time + beatDuration * 0.9);
+      }
+      audio.nextNoteTime += beatDuration;
+    }
+
+    function startMusicOnce() {
+      if (audio.musicPlaying) return;
+      initAudio();
+      audio.musicPlaying = true;
+      // Create two continuous oscillators (voices) and schedule their envelopes.
+      const bassOsc = audio.ctx.createOscillator();
+      const bassGain = audio.ctx.createGain();
+      bassOsc.type = "sine";
+      bassGain.gain.value = 0.001;
+      bassOsc.connect(bassGain).connect(audio.musicGain);
+      bassOsc.start();
+
+      const padOsc = audio.ctx.createOscillator();
+      const padGain = audio.ctx.createGain();
+      padOsc.type = "triangle";
+      padGain.gain.value = 0.001;
+      padOsc.connect(padGain).connect(audio.musicGain);
+      padOsc.start();
+
+      audio.musicVoices = [
+        { osc: bassOsc, gain: bassGain },
+        { osc: padOsc, gain: padGain },
+      ];
+      audio.nextNoteTime = audio.ctx.currentTime + 0.05;
+
+      const scheduler = () => {
+        if (!audio.musicPlaying) return;
+        while (audio.nextNoteTime < audio.ctx.currentTime + audio.lookahead) {
+          scheduleMusic(audio.nextNoteTime);
+        }
+      };
+      audio.musicTimer = setInterval(scheduler, audio.schedulerInterval);
+    }
+
+    function stopMusic() {
+      audio.musicPlaying = false;
+      if (audio.musicTimer) {
+        clearInterval(audio.musicTimer);
+        audio.musicTimer = null;
+      }
+    }
+
+    function toggleMusic() {
+      audio.musicEnabled = !audio.musicEnabled;
+      if (audio.musicGain) {
+        audio.musicGain.gain.value = audio.musicEnabled ? audio.musicVolume : 0;
+      }
+      saveMusicSettings();
+      refreshMenu();
+    }
+
+    function toggleMute() {
+      audio.muted = !audio.muted;
+      if (audio.masterGain) {
+        audio.masterGain.gain.value = audio.muted ? 0 : audio.masterVolume;
+      }
+    }
+
+    function setMusicVolume(value) {
+      audio.musicVolume = value;
+      if (audio.musicGain) {
+        audio.musicGain.gain.value = audio.musicEnabled ? audio.musicVolume : 0;
+      }
+      saveMusicSettings();
+      refreshMenu();
+    }
+
+    function toggleCrt() {
+      state.crtEnabled = !state.crtEnabled;
+      saveMusicSettings();
+      refreshMenu();
+    }
+
+    function handleFirstInteraction() {
+      // Initialize/resume AudioContext and start music once after user input.
+      initAudio();
+      if (audio.ctx && audio.ctx.state === "suspended") {
+        audio.ctx.resume();
+      }
+      if (!audio.musicStarted) {
+        audio.musicStarted = true;
+        startMusicOnce();
+      }
+    }
+
+    function resetGrid() {
+      invaderGrid.invaders = [];
+      for (let row = 0; row < invaderGrid.rows; row++) {
+        for (let col = 0; col < invaderGrid.cols; col++) {
+          invaderGrid.invaders.push({
+            x: invaderGrid.offsetX + col * invaderGrid.spacingX,
+            y: invaderGrid.offsetY + row * invaderGrid.spacingY,
+            alive: true,
+          });
+        }
+      }
+    }
+
+    function resetGame() {
+      state.running = true;
+      state.gameOver = false;
+      state.paused = false;
+      state.score = 0;
+      state.highScoreNoticeTime = 0;
+      state.lives = 3;
+      state.level = 1;
+      state.enemyShots = [];
+      state.playerShots = [];
+      state.powerUps = [];
+      state.particles = [];
+      state.powerUpDropCooldown = 0;
+      state.powerTimers.rapid = 0;
+      state.powerTimers.shield = 0;
+      state.powerTimers.spread = 0;
+      state.bossActive = false;
+      state.bossIncomingTime = 0;
+      state.bossDefeatedTime = 0;
+      state.bossLaser = null;
+      state.bossPattern = "laser";
+      state.bossPatternTimer = 0;
+      state.bossRainTimer = 0;
+      state.bossShots = [];
+      player.x = canvas.width / 2;
+      player.cooldown = 0;
+      invaderGrid.speed = 32;
+      invaderGrid.direction = 1;
+      resetGrid();
+    }
+
+    function showMenu() {
+      state.inMenu = true;
+      state.running = false;
+      state.paused = false;
+      state.gameOver = false;
+      keys.left = false;
+      keys.right = false;
+      keys.shoot = false;
+      menuScreen.classList.remove("hidden");
+      gameoverScreen.classList.add("hidden");
+      mobileControls.classList.add("hidden");
+      refreshMenu();
+    }
+
+    function startGame() {
+      // Hide the title screen and begin a fresh run.
+      resetGame();
+      state.inMenu = false;
+      menuScreen.classList.add("hidden");
+      gameoverScreen.classList.add("hidden");
+      mobileControls.classList.remove("hidden");
+      handleFirstInteraction();
+      // Audible test beep after user interaction to confirm volume.
+      beep(880, 0.08, "triangle", 0.14);
+      state.stats.runs += 1;
+      saveStats();
+      refreshMenu();
+    }
+
+    function showGameOverMenu() {
+      gameoverScreen.classList.remove("hidden");
+      mobileControls.classList.add("hidden");
+      refreshMenu();
+    }
+
+    loadLang();
+    loadMusicSettings();
+    loadStats();
+    resetGame();
+    loadHighScore();
+    applyTranslations();
+    showMenu();
+
+    function spawnPlayerShot() {
+      const speed = 380;
+      const spreadActive = state.powerTimers.spread > 0;
+      const shots = spreadActive ? [-0.35, 0, 0.35] : [0];
+      shots.forEach((angle) => {
+        state.playerShots.push({
+          x: player.x,
+          y: player.y - player.radius,
+          radius: 4,
+          vx: Math.sin(angle) * speed,
+          vy: -Math.cos(angle) * speed,
+        });
+      });
+      beep(520, 0.08, "square", 0.04);
+    }
+
+    function spawnEnemyShot(origin) {
+      state.enemyShots.push({
+        x: origin.x,
+        y: origin.y + 16,
+        radius: 5,
+        vx: 0,
+        vy: 180 + state.level * 10,
+      });
+      beep(220, 0.08, "sawtooth", 0.03);
+    }
+
+    function updateInvaders(dt) {
+      const step = invaderGrid.speed * invaderGrid.direction * dt;
+      let shouldDropThisTick = false;
+
+      invaderGrid.invaders.forEach((invader) => {
+        if (!invader.alive) return;
+        invader.x += step;
+      });
+
+      // Clamp overshoot and apply a single drop + direction flip when hitting edges.
+      const alive = invaderGrid.invaders.filter((invader) => invader.alive);
+      if (alive.length) {
+        const minX = Math.min(...alive.map((invader) => invader.x));
+        const maxX = Math.max(...alive.map((invader) => invader.x));
+        const leftLimit = invaderGrid.offsetX;
+        const rightLimit = canvas.width - invaderGrid.offsetX;
+        if (maxX > rightLimit) {
+          const overshoot = maxX - rightLimit;
+          alive.forEach((invader) => {
+            invader.x -= overshoot;
+          });
+          shouldDropThisTick = true;
+        } else if (minX < leftLimit) {
+          const overshoot = leftLimit - minX;
+          alive.forEach((invader) => {
+            invader.x += overshoot;
+          });
+          shouldDropThisTick = true;
+        }
+      }
+
+      // Apply the edge drop only once per tick to avoid sudden double drops.
+      if (shouldDropThisTick) {
+        invaderGrid.direction *= -1;
+        invaderGrid.invaders.forEach((invader) => {
+          if (!invader.alive) return;
+          invader.y += invaderGrid.drop;
+        });
+      }
+
+      // Random enemy shooting (scaled by level)
+      if (Math.random() < 0.012 + state.level * 0.003) {
+        const alive = invaderGrid.invaders.filter((invader) => invader.alive);
+        if (alive.length) {
+          spawnEnemyShot(alive[Math.floor(Math.random() * alive.length)]);
+        }
+      }
+    }
+
+    function spawnBoss() {
+      state.bossIncomingTime = 1;
+      state.bossActive = false;
+      boss.x = canvas.width / 2;
+      boss.y = 90;
+      boss.wobble = 0;
+      boss.maxHp = 80 + state.level * 20;
+      boss.hp = boss.maxHp;
+      state.bossPattern = "laser";
+      state.bossPatternTimer = 0;
+      state.bossRainTimer = 0;
+      state.bossShots = [];
+      state.bossHitFlash = 0;
+      state.bossLaserFired = false;
+    }
+
+    function updateBoss(dt) {
+      if (state.bossDefeatedTime > 0) {
+        state.bossDefeatedTime = Math.max(0, state.bossDefeatedTime - dt);
+        if (state.bossDefeatedTime === 0) {
+          state.level += 1;
+          state.score += 500;
+          invaderGrid.speed += 8;
+          invaderGrid.direction = 1;
+          state.bossActive = false;
+          resetGrid();
+          if (state.level > state.stats.bestLevel) {
+            state.stats.bestLevel = state.level;
+            saveStats();
+            refreshMenu();
+          }
+        }
+      }
+
+      if (state.bossIncomingTime > 0) {
+        state.bossIncomingTime = Math.max(0, state.bossIncomingTime - dt);
+        if (state.bossIncomingTime === 0) {
+          state.bossActive = true;
+          state.bossPatternTimer = 2;
+        }
+        return;
+      }
+
+      if (!state.bossActive) return;
+
+      boss.wobble += dt * 1.2;
+      boss.x = canvas.width / 2 + Math.sin(boss.wobble) * 90;
+      boss.y = 90 + Math.sin(boss.wobble * 0.6) * 8;
+
+      state.bossPatternTimer -= dt;
+      if (state.bossPatternTimer <= 0) {
+        state.bossPattern = state.bossPattern === "laser" ? "rain" : "laser";
+        state.bossPatternTimer = 3.5;
+        state.bossLaser = state.bossPattern === "laser" ? { warn: 0.6, fire: 0.4 } : null;
+      }
+
+      if (state.bossPattern === "laser" && state.bossLaser) {
+        if (state.bossLaser.warn > 0) {
+          state.bossLaser.warn -= dt;
+        } else {
+          if (!state.bossLaserFired) {
+            state.bossLaserFired = true;
+            state.shakeTime = Math.max(state.shakeTime, 0.16);
+          }
+          state.bossLaser.fire -= dt;
+          if (state.bossLaser.fire <= 0) {
+            state.bossLaser = null;
+            state.bossLaserFired = false;
+          }
+        }
+      }
+
+      if (state.bossPattern === "rain") {
+        state.bossRainTimer -= dt;
+        if (state.bossRainTimer <= 0) {
+          state.bossRainTimer = 0.25;
+          state.bossShots.push({
+            x: 60 + Math.random() * (canvas.width - 120),
+            y: boss.y + 20,
+            radius: 6,
+            speed: 220 + state.level * 8,
+          });
+        }
+      }
+
+      state.bossShots.forEach((shot) => {
+        shot.y += shot.speed * dt;
+      });
+      state.bossShots = state.bossShots.filter((shot) => shot.y < canvas.height + 20);
+
+      if (state.bossHitFlash > 0) {
+        state.bossHitFlash = Math.max(0, state.bossHitFlash - dt);
+      }
+    }
+
+    function checkInvaderGroundCollision() {
+      const groundLine = canvas.height - 20;
+      const invaderHeight = 32;
+      const breached = invaderGrid.invaders.some(
+        (invader) => invader.alive && invader.y + invaderHeight >= groundLine
+      );
+      if (breached) {
+        state.gameOver = true;
+        state.running = false;
+        state.enemyShots = [];
+        if (state.level > state.stats.bestLevel) {
+          state.stats.bestLevel = state.level;
+          saveStats();
+          refreshMenu();
+        }
+        showGameOverMenu();
+      }
+    }
+
+    function checkBossGroundCollision() {
+      if (!state.bossActive) return;
+      const groundLine = canvas.height - 20;
+      if (boss.y + boss.size / 2 >= groundLine) {
+        state.gameOver = true;
+        state.running = false;
+        state.enemyShots = [];
+        state.bossShots = [];
+        if (state.level > state.stats.bestLevel) {
+          state.stats.bestLevel = state.level;
+          saveStats();
+          refreshMenu();
+        }
+        showGameOverMenu();
+      }
+    }
+
+    function updateShots(dt) {
+      state.playerShots.forEach((shot) => {
+        shot.x += shot.vx * dt;
+        shot.y += shot.vy * dt;
+      });
+      state.enemyShots.forEach((shot) => {
+        shot.x += shot.vx * dt;
+        shot.y += shot.vy * dt;
+      });
+
+      state.playerShots = state.playerShots.filter((shot) => shot.y > -20);
+      state.enemyShots = state.enemyShots.filter((shot) => shot.y < canvas.height + 20);
+    }
+
+    function spawnPowerUp(x, y) {
+      // Reduce power-up frequency: lower base chance + cooldown + active-power penalty.
+      if (state.powerUpDropCooldown > 0) return;
+      const hasActivePower =
+        state.powerTimers.rapid > 0 || state.powerTimers.shield > 0 || state.powerTimers.spread > 0;
+      const baseChance = 0.06;
+      const dropChance = hasActivePower ? baseChance * 0.5 : baseChance;
+      if (Math.random() > dropChance) return;
+      const types = ["rapid", "shield", "spread"];
+      const type = types[Math.floor(Math.random() * types.length)];
+      state.powerUps.push({
+        x,
+        y,
+        radius: 10,
+        speed: 90,
+        type,
+      });
+      state.powerUpDropCooldown = 4;
+    }
+
+    function spawnParticles(x, y, color = "#f26b6b", count = 10) {
+      for (let i = 0; i < count; i++) {
+        state.particles.push({
+          x,
+          y,
+          vx: (Math.random() - 0.5) * 120,
+          vy: (Math.random() - 0.5) * 120,
+          life: 0.6 + Math.random() * 0.4,
+          color,
+        });
+      }
+    }
+
+    function circleHit(a, b) {
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      return Math.hypot(dx, dy) < a.radius + b.radius;
+    }
+
+    function handleCollisions() {
+      // Player shots vs invaders
+      state.playerShots.forEach((shot) => {
+        invaderGrid.invaders.forEach((invader) => {
+          if (!invader.alive) return;
+          const target = { x: invader.x, y: invader.y, radius: 16 };
+          if (circleHit(shot, target)) {
+            invader.alive = false;
+            shot.y = -100;
+            state.score += 50;
+            state.stats.kills += 1;
+            saveStats();
+            spawnPowerUp(invader.x, invader.y);
+            spawnParticles(invader.x, invader.y, "#f5b15f");
+            beep(740, 0.06, "triangle", 0.04);
+          }
+        });
+      });
+
+      // Player shots vs boss (no kills counted for boss)
+      if (state.bossActive) {
+        state.playerShots.forEach((shot) => {
+          const dx = shot.x - boss.x;
+          const dy = shot.y - boss.y;
+          if (Math.hypot(dx, dy) < shot.radius + boss.size / 2) {
+            shot.y = -100;
+            boss.hp -= 4;
+            state.bossHitFlash = 0.08;
+            beep(520, 0.05, "square", 0.09);
+            if (boss.hp <= 0) {
+              state.bossActive = false;
+              state.bossDefeatedTime = 1.4;
+              state.bossShots = [];
+              state.bossLaser = null;
+            }
+          }
+        });
+      }
+
+      // Enemy shots vs player
+      state.enemyShots.forEach((shot) => {
+        if (circleHit(shot, player)) {
+          shot.y = canvas.height + 50;
+          if (state.powerTimers.shield > 0) {
+            state.powerTimers.shield = 0;
+            spawnParticles(player.x, player.y, "#6de2ff", 18);
+            beep(320, 0.12, "triangle", 0.06);
+          } else {
+            state.lives -= 1;
+            state.shakeTime = 0.25;
+            spawnParticles(player.x, player.y, "#ff6868", 16);
+            beep(120, 0.15, "sawtooth", 0.08);
+            if (state.lives <= 0) {
+              state.running = false;
+              if (state.level > state.stats.bestLevel) {
+                state.stats.bestLevel = state.level;
+                saveStats();
+                refreshMenu();
+              }
+              showGameOverMenu();
+            }
+          }
+        }
+      });
+
+      // Boss shots / laser vs player
+      if (state.bossActive) {
+        state.bossShots.forEach((shot) => {
+          if (circleHit(shot, player)) {
+            shot.y = canvas.height + 50;
+            if (state.powerTimers.shield > 0) {
+              state.powerTimers.shield = 0;
+              spawnParticles(player.x, player.y, "#6de2ff", 18);
+              beep(320, 0.12, "triangle", 0.06);
+            } else {
+              state.lives -= 1;
+              state.shakeTime = 0.25;
+              spawnParticles(player.x, player.y, "#ff6868", 16);
+              beep(120, 0.15, "sawtooth", 0.08);
+              if (state.lives <= 0) {
+                state.running = false;
+                if (state.level > state.stats.bestLevel) {
+                  state.stats.bestLevel = state.level;
+                  saveStats();
+                  refreshMenu();
+                }
+                showGameOverMenu();
+              }
+            }
+          }
+        });
+
+        if (state.bossLaser && state.bossLaser.warn <= 0 && state.bossLaser.fire > 0) {
+          const laserY = boss.y + boss.size / 2;
+          if (Math.abs(player.y - laserY) < 12) {
+            if (state.powerTimers.shield > 0) {
+              state.powerTimers.shield = 0;
+              spawnParticles(player.x, player.y, "#6de2ff", 18);
+              beep(320, 0.12, "triangle", 0.06);
+            } else {
+              state.lives -= 1;
+              state.shakeTime = 0.25;
+              spawnParticles(player.x, player.y, "#ff6868", 16);
+              beep(120, 0.15, "sawtooth", 0.08);
+              if (state.lives <= 0) {
+                state.running = false;
+                if (state.level > state.stats.bestLevel) {
+                  state.stats.bestLevel = state.level;
+                  saveStats();
+                  refreshMenu();
+                }
+                showGameOverMenu();
+              }
+            }
+          }
+        }
+      }
+    }
+
+    function updatePowerUps(dt) {
+      state.powerUps.forEach((power) => {
+        power.y += power.speed * dt;
+        if (circleHit(power, player)) {
+          if (power.type === "rapid") {
+            state.powerTimers.rapid = 6;
+          }
+          if (power.type === "shield") {
+            state.powerTimers.shield = 8;
+          }
+          if (power.type === "spread") {
+            state.powerTimers.spread = 7;
+          }
+          beep(660, 0.1, "triangle", 0.05);
+          spawnParticles(power.x, power.y, "#fff2a1", 12);
+          power.y = canvas.height + 40;
+        }
+      });
+      state.powerUps = state.powerUps.filter((power) => power.y < canvas.height + 20);
+    }
+
+    function updateParticles(dt) {
+      state.particles.forEach((particle) => {
+        particle.life -= dt;
+        particle.x += particle.vx * dt;
+        particle.y += particle.vy * dt;
+      });
+      state.particles = state.particles.filter((particle) => particle.life > 0);
+    }
+
+    function advanceLevelIfNeeded() {
+      const remaining = invaderGrid.invaders.some((invader) => invader.alive);
+      if (!remaining) {
+        state.level += 1;
+        state.score += 200;
+        invaderGrid.speed += 8;
+        invaderGrid.direction = 1;
+        if (state.level % 3 === 0) {
+          invaderGrid.invaders = [];
+          spawnBoss();
+        } else {
+          resetGrid();
+        }
+        beep(880, 0.12, "triangle", 0.06);
+        if (state.level > state.stats.bestLevel) {
+          state.stats.bestLevel = state.level;
+          saveStats();
+          refreshMenu();
+        }
+      }
+    }
+
+    function updatePlayer(dt) {
+      if (keys.left) player.x -= player.speed * dt;
+      if (keys.right) player.x += player.speed * dt;
+      player.x = Math.max(player.radius + 10, Math.min(canvas.width - player.radius - 10, player.x));
+
+      if (player.cooldown > 0) {
+        player.cooldown -= dt;
+      }
+
+      if (keys.shoot && player.cooldown <= 0 && state.running) {
+        spawnPlayerShot();
+        player.cooldown = state.powerTimers.rapid > 0 ? 0.12 : 0.28;
+      }
+    }
+
+    function updatePowerTimers(dt) {
+      Object.keys(state.powerTimers).forEach((key) => {
+        if (state.powerTimers[key] > 0) {
+          state.powerTimers[key] = Math.max(0, state.powerTimers[key] - dt);
+        }
+      });
+      if (state.powerUpDropCooldown > 0) {
+        state.powerUpDropCooldown = Math.max(0, state.powerUpDropCooldown - dt);
+      }
+    }
+
+    function updateHighScore(dt) {
+      if (state.score > state.highScore) {
+        state.highScore = state.score;
+        saveHighScore();
+        refreshMenu();
+      }
+      if (state.highScoreNoticeTime > 0) {
+        state.highScoreNoticeTime = Math.max(0, state.highScoreNoticeTime - dt);
+      }
+    }
+
+    function updateStatsNotice(dt) {
+      if (state.statsNoticeTime > 0) {
+        state.statsNoticeTime = Math.max(0, state.statsNoticeTime - dt);
+        if (state.statsNoticeTime === 0 && state.inMenu) {
+          refreshMenu();
+        }
+      }
+      if (state.langNoticeTime > 0) {
+        state.langNoticeTime = Math.max(0, state.langNoticeTime - dt);
+        if (state.langNoticeTime === 0 && state.inMenu) {
+          refreshMenu();
+        }
+      }
+    }
+
+    function drawBackground(dt) {
+      state.backgroundPulse += dt * 1.4;
+      const glow = 0.12 + Math.sin(state.backgroundPulse) * 0.05;
+      const gradient = ctx.createRadialGradient(
+        canvas.width / 2,
+        canvas.height / 2,
+        40,
+        canvas.width / 2,
+        canvas.height / 2,
+        canvas.width / 1.2
+      );
+      gradient.addColorStop(0, `rgba(130, 10, 10, ${glow + 0.08})`);
+      gradient.addColorStop(1, "rgba(0, 0, 0, 0.9)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Subtle flicker overlay (toggle with V for visibility debug).
+      if (state.debugOverlay) {
+        ctx.fillStyle = `rgba(255, 60, 60, ${0.04 + Math.random() * 0.03})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+    }
+
+    function drawCrtOverlay() {
+      if (!state.crtEnabled) return;
+      ctx.save();
+      ctx.globalAlpha = 0.08;
+      // Soft scanlines.
+      ctx.fillStyle = "rgba(0, 0, 0, 0.25)";
+      for (let y = 0; y < canvas.height; y += 4) {
+        ctx.fillRect(0, y, canvas.width, 1);
+      }
+      // Light vignette without crushing sprites.
+      const vignette = ctx.createRadialGradient(
+        canvas.width / 2,
+        canvas.height / 2,
+        canvas.width * 0.1,
+        canvas.width / 2,
+        canvas.height / 2,
+        canvas.width * 0.75
+      );
+      vignette.addColorStop(0, "rgba(0,0,0,0)");
+      vignette.addColorStop(1, "rgba(0,0,0,0.18)");
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Gentle flicker tint.
+      ctx.globalAlpha = 0.06;
+      ctx.fillStyle = `rgba(255, 40, 40, ${0.06 + Math.random() * 0.03})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+    }
+
+    function drawPlayer() {
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      ctx.fillStyle = "#f24848";
+      ctx.beginPath();
+      ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (state.powerTimers.shield > 0) {
+        ctx.strokeStyle = "rgba(109, 226, 255, 0.8)";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, player.radius + 6, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = "#ffd1d1";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, player.radius - 6, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = "#320000";
+      ctx.beginPath();
+      ctx.arc(-5, -4, 3, 0, Math.PI * 2);
+      ctx.arc(6, -4, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawInvader(invader) {
+      ctx.save();
+      ctx.translate(invader.x, invader.y);
+      // Force full opacity/shadows off for clear emoji rendering.
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = "transparent";
+      // Draw invaders as a centered devil emoji; fallback to text if emoji fails.
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "24px system-ui, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\"";
+      ctx.fillText("😈", 0, 0);
+      if (!ctx.measureText("😈").width) {
+        ctx.fillStyle = "#e9d1d1";
+        ctx.font = "16px Trebuchet MS";
+        ctx.fillText(t("devil"), 0, 0);
+      }
+      ctx.restore();
+    }
+
+    function drawBoss() {
+      if (!state.bossActive) return;
+      ctx.save();
+      ctx.translate(boss.x, boss.y);
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = "transparent";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "64px system-ui, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\"";
+      ctx.fillText("😈", 0, 0);
+      // Brief flash when the boss is hit to make impacts feel heavier.
+      if (state.bossHitFlash > 0) {
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = "rgba(255, 220, 220, 0.8)";
+        ctx.beginPath();
+        ctx.arc(0, 0, boss.size * 0.55, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawBossAttacks() {
+      if (!state.bossActive) return;
+      if (state.bossLaser) {
+        const laserY = boss.y + boss.size / 2;
+        ctx.save();
+        ctx.strokeStyle = state.bossLaser.warn > 0 ? "rgba(255, 120, 120, 0.5)" : "rgba(255, 80, 80, 0.9)";
+        ctx.lineWidth = state.bossLaser.warn > 0 ? 2 : 5;
+        ctx.beginPath();
+        ctx.moveTo(20, laserY);
+        ctx.lineTo(canvas.width - 20, laserY);
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.fillStyle = "#ff8a3a";
+      state.bossShots.forEach((shot) => {
+        ctx.beginPath();
+        ctx.arc(shot.x, shot.y, shot.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    function drawShots() {
+      ctx.fillStyle = "#f9a23a";
+      state.playerShots.forEach((shot) => {
+        ctx.beginPath();
+        ctx.arc(shot.x, shot.y, shot.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      ctx.fillStyle = "#6de2ff";
+      state.enemyShots.forEach((shot) => {
+        ctx.beginPath();
+        ctx.arc(shot.x, shot.y, shot.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    function drawPowerUps() {
+      state.powerUps.forEach((power) => {
+        ctx.save();
+        ctx.translate(power.x, power.y);
+        ctx.strokeStyle = "#fff2a1";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, power.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = "#ff9f43";
+        ctx.font = "12px Trebuchet MS";
+        const label = power.type === "rapid" ? "R" : power.type === "shield" ? "S" : "X";
+        ctx.fillText(label, -4, 4);
+        ctx.restore();
+      });
+    }
+
+    function drawParticles() {
+      state.particles.forEach((particle) => {
+        ctx.fillStyle = particle.color;
+        ctx.globalAlpha = Math.max(0, particle.life);
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+    }
+
+    function drawHUD() {
+      if (state.inMenu) return;
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.font = "16px Trebuchet MS";
+      ctx.fillText(`${t("score")}: ${state.score}`, 18, 24);
+      ctx.fillText(`${t("highScore")}: ${state.highScore}`, 18, 44);
+      ctx.fillText(`${t("lives")}: ${state.lives}`, 18, 64);
+      ctx.fillText(`${t("level")}: ${state.level}`, canvas.width - 110, 24);
+      ctx.fillText(`${t("music")}: ${audio.musicEnabled ? t("on") : t("off")}`, canvas.width - 170, 44);
+      const audioState = audio.ctx ? audio.ctx.state : "suspended";
+      ctx.fillText(
+        `${t("audio")}: ${audioState === "running" ? t("audioOk") : t("audioLocked")}`,
+        canvas.width - 170,
+        64
+      );
+      if (state.bossActive) {
+        const barWidth = 220;
+        const barX = canvas.width / 2 - barWidth / 2;
+        const barY = 20;
+        ctx.fillStyle = "rgba(80,0,0,0.6)";
+        ctx.fillRect(barX, barY, barWidth, 10);
+        ctx.fillStyle = "#ff5d5d";
+        ctx.fillRect(barX, barY, barWidth * (boss.hp / boss.maxHp), 10);
+        ctx.strokeStyle = "rgba(255,255,255,0.6)";
+        ctx.strokeRect(barX, barY, barWidth, 10);
+        ctx.fillStyle = "rgba(255,255,255,0.85)";
+        ctx.fillText(t("boss"), barX + barWidth + 8, barY + 10);
+      }
+
+      ctx.fillStyle = "rgba(255,255,255,0.75)";
+      const timers = state.powerTimers;
+      ctx.fillText(`Rapid: ${timers.rapid.toFixed(1)}s`, 18, 84);
+      ctx.fillText(`Shield: ${timers.shield.toFixed(1)}s`, 18, 102);
+      ctx.fillText(`Spread: ${timers.spread.toFixed(1)}s`, 18, 120);
+      if (state.highScoreNoticeTime > 0) {
+        ctx.fillStyle = "rgba(255,255,255,0.75)";
+        ctx.fillText(t("highScoreReset"), 18, 140);
+      }
+
+      ctx.fillStyle = "rgba(255,255,255,0.7)";
+      if (state.paused) {
+        ctx.fillText(t("paused"), canvas.width - 90, 82);
+      }
+      if (audio.muted) {
+        ctx.fillText(t("mute"), canvas.width - 90, 100);
+      }
+      if (state.statsNoticeTime > 0) {
+        ctx.fillText(t("statsResetHud"), canvas.width - 120, 120);
+      }
+      if (state.langNoticeTime > 0) {
+        ctx.fillText(t("languageNotice"), canvas.width - 170, 140);
+      }
+
+      if (!state.running && !state.inMenu) {
+        ctx.fillStyle = "rgba(0,0,0,0.6)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#ffd8d8";
+        ctx.font = "bold 36px Trebuchet MS";
+        ctx.fillText(t("gameOver"), canvas.width / 2 - 120, canvas.height / 2);
+        ctx.font = "16px Trebuchet MS";
+        if (state.gameOver) {
+          ctx.fillText(
+            t("invadersReached"),
+            canvas.width / 2 - 130,
+            canvas.height / 2 + 22
+          );
+          ctx.fillText(
+            `${t("highScore")}: ${state.highScore}`,
+            canvas.width / 2 - 80,
+            canvas.height / 2 + 42
+          );
+          ctx.fillText(t("pressRestart"), canvas.width / 2 - 95, canvas.height / 2 + 45);
+        } else {
+          ctx.fillText(
+            `${t("highScore")}: ${state.highScore}`,
+            canvas.width / 2 - 80,
+            canvas.height / 2 + 20
+          );
+          ctx.fillText(t("pressRestart"), canvas.width / 2 - 95, canvas.height / 2 + 30);
+        }
+      }
+      if (state.bossIncomingTime > 0) {
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#ffd8d8";
+        ctx.font = "bold 28px Trebuchet MS";
+        ctx.fillText(t("bossIncomingNotice"), canvas.width / 2 - 110, canvas.height / 2);
+      }
+      if (state.bossDefeatedTime > 0) {
+        ctx.fillStyle = "rgba(0,0,0,0.4)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#ffd8d8";
+        ctx.font = "bold 28px Trebuchet MS";
+        ctx.fillText(t("bossDefeatedNotice"), canvas.width / 2 - 105, canvas.height / 2);
+      }
+    }
+
+    function drawPauseOverlay() {
+      if (!state.paused || !state.running || state.inMenu) return;
+      ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#ffd8d8";
+      ctx.font = "bold 36px Trebuchet MS";
+      ctx.fillText(t("paused"), canvas.width / 2 - 70, canvas.height / 2);
+      ctx.font = "16px Trebuchet MS";
+      ctx.fillText(t("pressResume"), canvas.width / 2 - 100, canvas.height / 2 + 28);
+      ctx.fillText(
+        tf("crtPause", { state: state.crtEnabled ? t("on") : t("off") }),
+        canvas.width / 2 - 70,
+        canvas.height / 2 + 50
+      );
+    }
+
+    function applyScreenShake(dt) {
+      if (state.shakeTime > 0) {
+        state.shakeTime -= dt;
+        const intensity = 4 * (state.shakeTime / 0.25);
+        const offsetX = (Math.random() - 0.5) * intensity;
+        const offsetY = (Math.random() - 0.5) * intensity;
+        ctx.translate(offsetX, offsetY);
+      }
+    }
+
+    function update(timestamp) {
+      // Clamp dt to avoid large jumps after tab switches or lag spikes.
+      const dt = Math.min((timestamp - state.lastTime) / 1000, 0.05);
+      state.lastTime = timestamp;
+
+      ctx.save();
+      drawBackground(dt);
+      if (!state.paused) {
+        applyScreenShake(dt);
+      }
+
+      updateStatsNotice(dt);
+      if (state.running && !state.paused && !state.inMenu) {
+        updateBoss(dt);
+        if (state.bossIncomingTime === 0) {
+          updatePlayer(dt);
+          if (!state.bossActive && state.bossDefeatedTime === 0) {
+            updateInvaders(dt);
+            checkInvaderGroundCollision();
+          } else {
+            checkBossGroundCollision();
+          }
+          updateShots(dt);
+          updatePowerUps(dt);
+          updateParticles(dt);
+          updatePowerTimers(dt);
+          updateHighScore(dt);
+          handleCollisions();
+          if (!state.bossActive && state.bossDefeatedTime === 0) {
+            advanceLevelIfNeeded();
+          }
+        }
+      }
+
+      drawPlayer();
+      if (!state.bossActive && state.bossIncomingTime === 0 && state.bossDefeatedTime === 0) {
+        invaderGrid.invaders.forEach((invader) => invader.alive && drawInvader(invader));
+      }
+      drawBoss();
+      drawBossAttacks();
+      drawShots();
+      drawPowerUps();
+      drawParticles();
+      drawCrtOverlay();
+      drawHUD();
+      drawPauseOverlay();
+
+      ctx.restore();
+      requestAnimationFrame(update);
+    }
+
+    requestAnimationFrame(update);
+
+    // Create AudioContext early (still suspended until user interaction).
+    initAudio();
+
+    // First user input resumes AudioContext and starts music once.
+    window.addEventListener("keydown", handleFirstInteraction, { once: true });
+    window.addEventListener("click", handleFirstInteraction, { once: true });
+
+    mobileControls.querySelectorAll("[data-action]").forEach(bindMobileButton);
+
+    playButton.addEventListener("click", startGame);
+    musicVolLow.addEventListener("click", () => setMusicVolume(0.18));
+    musicVolMid.addEventListener("click", () => setMusicVolume(0.35));
+    musicVolHigh.addEventListener("click", () => setMusicVolume(0.6));
+    restartButton.addEventListener("click", () => {
+      resetGame();
+      state.inMenu = false;
+      gameoverScreen.classList.add("hidden");
+      handleFirstInteraction();
+    });
+    menuButton.addEventListener("click", showMenu);
+    musicButton.addEventListener("click", toggleMusic);
+    crtButton.addEventListener("click", toggleCrt);
+    langButton.addEventListener("click", toggleLang);
+
+    window.addEventListener("keydown", (event) => {
+      if (state.inMenu && event.code === "Enter") {
+        startGame();
+        return;
+      }
+      if (event.code === "ArrowLeft") keys.left = true;
+      if (event.code === "ArrowRight") keys.right = true;
+      if (event.code === "Space") {
+        keys.shoot = true;
+        initAudio();
+      }
+      if (event.code === "KeyR") {
+        if (!state.running && !state.inMenu) {
+          resetGame();
+          state.inMenu = false;
+          gameoverScreen.classList.add("hidden");
+          handleFirstInteraction();
+        } else {
+          resetGame();
+        }
+      }
+      if (event.code === "KeyP") {
+        if (state.running) {
+          state.paused = !state.paused;
+        }
+      }
+      if (event.code === "KeyM") {
+        if (!state.running && !state.inMenu) {
+          showMenu();
+        } else {
+          toggleMute();
+        }
+      }
+      if (event.code === "KeyC") {
+        toggleCrt();
+      }
+      if ((state.inMenu || state.paused) && event.code === "KeyL") {
+        toggleLang();
+      }
+      if (event.code === "KeyH") {
+        state.highScore = 0;
+        saveHighScore();
+        state.highScoreNoticeTime = 1.5;
+        refreshMenu();
+      }
+      if (event.code === "KeyX" && (state.inMenu || !state.running)) {
+        state.stats.runs = 0;
+        state.stats.kills = 0;
+        state.stats.bestLevel = 1;
+        saveStats();
+        state.statsNoticeTime = 1.5;
+        refreshMenu();
+      }
+      if (event.code === "KeyV") {
+        state.debugOverlay = !state.debugOverlay;
+      }
+    });
+
+    window.addEventListener("keyup", (event) => {
+      if (event.code === "ArrowLeft") keys.left = false;
+      if (event.code === "ArrowRight") keys.right = false;
+      if (event.code === "Space") keys.shoot = false;
+    });
+  </script>
+</body>
+</html>

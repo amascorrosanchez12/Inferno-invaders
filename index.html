@@ -488,6 +488,12 @@
       },
     };
 
+    const gameState = {
+      paused: false,
+      restarting: false,
+      inMenu: false,
+    };
+
     const keys = {
       left: false,
       right: false,
@@ -969,15 +975,19 @@
     }
 
     function restartGame() {
+      gameState.restarting = true;
       setPaused(false);
+      gameState.paused = false;
       if (!state.running && !state.inMenu) {
         resetGame();
         state.inMenu = false;
+        gameState.inMenu = false;
         gameoverScreen.classList.add("hidden");
         handleFirstInteraction();
       } else {
         resetGame();
       }
+      gameState.restarting = false;
     }
 
     function togglePause() {
@@ -988,8 +998,26 @@
 
     function setPaused(value) {
       state.paused = value;
+      gameState.paused = value;
       updatePauseButtonLabel();
       updateControlHints();
+    }
+
+    function resumeGame() {
+      setPaused(false);
+    }
+
+    function pauseGame() {
+      if (gameState.restarting) return;
+      setPaused(true);
+    }
+
+    function onPauseButton() {
+      if (gameState.paused) {
+        resumeGame();
+      } else {
+        pauseGame();
+      }
     }
 
     function handleMuteAction() {
@@ -1067,6 +1095,7 @@
 
     function showMenu() {
       state.inMenu = true;
+      gameState.inMenu = true;
       state.running = false;
       state.paused = false;
       state.gameOver = false;
@@ -1084,6 +1113,7 @@
       layoutAll();
       resetGame();
       state.inMenu = false;
+      gameState.inMenu = false;
       menuScreen.classList.add("hidden");
       gameoverScreen.classList.add("hidden");
       ensureTouchControls();
@@ -1934,19 +1964,9 @@
       }
     }
 
-    function update(timestamp) {
-      // Clamp dt to avoid large jumps after tab switches or lag spikes.
-      const dt = Math.min((timestamp - state.lastTime) / 1000, 0.05);
-      state.lastTime = timestamp;
-
-      ctx.save();
-      drawBackground(dt);
-      if (!state.paused) {
-        applyScreenShake(dt);
-      }
-
-      updateStatsNotice(dt);
-      if (state.running && !state.paused && !state.inMenu) {
+    function updateGame(dt) {
+      if (gameState.paused) return;
+      if (state.running && !state.inMenu) {
         updateBoss(dt);
         if (state.bossIncomingTime === 0) {
           updatePlayer(dt);
@@ -1967,6 +1987,21 @@
           }
         }
       }
+    }
+
+    function update(timestamp) {
+      // Clamp dt to avoid large jumps after tab switches or lag spikes.
+      const dt = Math.min((timestamp - state.lastTime) / 1000, 0.05);
+      state.lastTime = timestamp;
+
+      ctx.save();
+      drawBackground(dt);
+      if (!state.paused) {
+        applyScreenShake(dt);
+      }
+
+      updateStatsNotice(dt);
+      updateGame(dt);
 
       drawPlayer();
       if (!state.bossActive && state.bossIncomingTime === 0 && state.bossDefeatedTime === 0) {

@@ -216,6 +216,14 @@
       paused: false,
       debugOverlay: true,
       crtEnabled: false,
+      bossActive: false,
+      bossIncomingTime: 0,
+      bossDefeatedTime: 0,
+      bossLaser: null,
+      bossPattern: "laser",
+      bossPatternTimer: 0,
+      bossRainTimer: 0,
+      bossShots: [],
       statsNoticeTime: 0,
       stats: {
         runs: 0,
@@ -249,6 +257,15 @@
       radius: 18,
       speed: 260,
       cooldown: 0,
+    };
+
+    const boss = {
+      x: canvas.width / 2,
+      y: 90,
+      size: 72,
+      hp: 0,
+      maxHp: 0,
+      wobble: 0,
     };
 
     const invaderGrid = {
@@ -437,17 +454,18 @@
 
     function scheduleMusic(time) {
       // Procedural notes scheduled slightly ahead for stable timing.
-      const tempo = 80 + state.level * 6;
+      const tempo = 80 + state.level * 6 + (state.bossActive ? 18 : 0);
       const beatDuration = 60 / tempo;
       const notes = [110, 165, 196, 220, 196, 165];
       const tone = notes[Math.floor(Math.random() * notes.length)];
+      const bossPitch = state.bossActive ? 1.12 : 1;
       const bass = audio.musicVoices[0];
       const pad = audio.musicVoices[1];
       if (bass && pad) {
-        bass.osc.frequency.setValueAtTime(tone, time);
+        bass.osc.frequency.setValueAtTime(tone * bossPitch, time);
         bass.gain.gain.setValueAtTime(0.08, time);
         bass.gain.gain.exponentialRampToValueAtTime(0.001, time + beatDuration * 0.95);
-        pad.osc.frequency.setValueAtTime(tone * 2, time);
+        pad.osc.frequency.setValueAtTime(tone * 2 * bossPitch, time);
         pad.gain.gain.setValueAtTime(0.04, time);
         pad.gain.gain.exponentialRampToValueAtTime(0.001, time + beatDuration * 0.9);
       }
@@ -568,6 +586,14 @@
       state.powerTimers.rapid = 0;
       state.powerTimers.shield = 0;
       state.powerTimers.spread = 0;
+      state.bossActive = false;
+      state.bossIncomingTime = 0;
+      state.bossDefeatedTime = 0;
+      state.bossLaser = null;
+      state.bossPattern = "laser";
+      state.bossPatternTimer = 0;
+      state.bossRainTimer = 0;
+      state.bossShots = [];
       player.x = canvas.width / 2;
       player.cooldown = 0;
       invaderGrid.speed = 32;
@@ -692,6 +718,90 @@
       }
     }
 
+    function spawnBoss() {
+      state.bossIncomingTime = 1;
+      state.bossActive = false;
+      boss.x = canvas.width / 2;
+      boss.y = 90;
+      boss.wobble = 0;
+      boss.maxHp = 80 + state.level * 20;
+      boss.hp = boss.maxHp;
+      state.bossPattern = "laser";
+      state.bossPatternTimer = 0;
+      state.bossRainTimer = 0;
+      state.bossShots = [];
+    }
+
+    function updateBoss(dt) {
+      if (state.bossDefeatedTime > 0) {
+        state.bossDefeatedTime = Math.max(0, state.bossDefeatedTime - dt);
+        if (state.bossDefeatedTime === 0) {
+          state.level += 1;
+          state.score += 500;
+          invaderGrid.speed += 8;
+          invaderGrid.direction = 1;
+          state.bossActive = false;
+          resetGrid();
+          if (state.level > state.stats.bestLevel) {
+            state.stats.bestLevel = state.level;
+            saveStats();
+            refreshMenu();
+          }
+        }
+      }
+
+      if (state.bossIncomingTime > 0) {
+        state.bossIncomingTime = Math.max(0, state.bossIncomingTime - dt);
+        if (state.bossIncomingTime === 0) {
+          state.bossActive = true;
+          state.bossPatternTimer = 2;
+        }
+        return;
+      }
+
+      if (!state.bossActive) return;
+
+      boss.wobble += dt * 1.2;
+      boss.x = canvas.width / 2 + Math.sin(boss.wobble) * 90;
+      boss.y = 90 + Math.sin(boss.wobble * 0.6) * 8;
+
+      state.bossPatternTimer -= dt;
+      if (state.bossPatternTimer <= 0) {
+        state.bossPattern = state.bossPattern === "laser" ? "rain" : "laser";
+        state.bossPatternTimer = 3.5;
+        state.bossLaser = state.bossPattern === "laser" ? { warn: 0.6, fire: 0.4 } : null;
+      }
+
+      if (state.bossPattern === "laser" && state.bossLaser) {
+        if (state.bossLaser.warn > 0) {
+          state.bossLaser.warn -= dt;
+        } else {
+          state.bossLaser.fire -= dt;
+          if (state.bossLaser.fire <= 0) {
+            state.bossLaser = null;
+          }
+        }
+      }
+
+      if (state.bossPattern === "rain") {
+        state.bossRainTimer -= dt;
+        if (state.bossRainTimer <= 0) {
+          state.bossRainTimer = 0.25;
+          state.bossShots.push({
+            x: 60 + Math.random() * (canvas.width - 120),
+            y: boss.y + 20,
+            radius: 6,
+            speed: 220 + state.level * 8,
+          });
+        }
+      }
+
+      state.bossShots.forEach((shot) => {
+        shot.y += shot.speed * dt;
+      });
+      state.bossShots = state.bossShots.filter((shot) => shot.y < canvas.height + 20);
+    }
+
     function checkInvaderGroundCollision() {
       const groundLine = canvas.height - 20;
       const invaderHeight = 32;
@@ -702,6 +812,23 @@
         state.gameOver = true;
         state.running = false;
         state.enemyShots = [];
+        if (state.level > state.stats.bestLevel) {
+          state.stats.bestLevel = state.level;
+          saveStats();
+          refreshMenu();
+        }
+        showGameOverMenu();
+      }
+    }
+
+    function checkBossGroundCollision() {
+      if (!state.bossActive) return;
+      const groundLine = canvas.height - 20;
+      if (boss.y + boss.size / 2 >= groundLine) {
+        state.gameOver = true;
+        state.running = false;
+        state.enemyShots = [];
+        state.bossShots = [];
         if (state.level > state.stats.bestLevel) {
           state.stats.bestLevel = state.level;
           saveStats();
@@ -783,6 +910,25 @@
         });
       });
 
+      // Player shots vs boss (no kills counted for boss)
+      if (state.bossActive) {
+        state.playerShots.forEach((shot) => {
+          const dx = shot.x - boss.x;
+          const dy = shot.y - boss.y;
+          if (Math.hypot(dx, dy) < shot.radius + boss.size / 2) {
+            shot.y = -100;
+            boss.hp -= 4;
+            beep(520, 0.05, "square", 0.09);
+            if (boss.hp <= 0) {
+              state.bossActive = false;
+              state.bossDefeatedTime = 1.4;
+              state.bossShots = [];
+              state.bossLaser = null;
+            }
+          }
+        });
+      }
+
       // Enemy shots vs player
       state.enemyShots.forEach((shot) => {
         if (circleHit(shot, player)) {
@@ -808,6 +954,59 @@
           }
         }
       });
+
+      // Boss shots / laser vs player
+      if (state.bossActive) {
+        state.bossShots.forEach((shot) => {
+          if (circleHit(shot, player)) {
+            shot.y = canvas.height + 50;
+            if (state.powerTimers.shield > 0) {
+              state.powerTimers.shield = 0;
+              spawnParticles(player.x, player.y, "#6de2ff", 18);
+              beep(320, 0.12, "triangle", 0.06);
+            } else {
+              state.lives -= 1;
+              state.shakeTime = 0.25;
+              spawnParticles(player.x, player.y, "#ff6868", 16);
+              beep(120, 0.15, "sawtooth", 0.08);
+              if (state.lives <= 0) {
+                state.running = false;
+                if (state.level > state.stats.bestLevel) {
+                  state.stats.bestLevel = state.level;
+                  saveStats();
+                  refreshMenu();
+                }
+                showGameOverMenu();
+              }
+            }
+          }
+        });
+
+        if (state.bossLaser && state.bossLaser.warn <= 0 && state.bossLaser.fire > 0) {
+          const laserY = boss.y + boss.size / 2;
+          if (Math.abs(player.y - laserY) < 12) {
+            if (state.powerTimers.shield > 0) {
+              state.powerTimers.shield = 0;
+              spawnParticles(player.x, player.y, "#6de2ff", 18);
+              beep(320, 0.12, "triangle", 0.06);
+            } else {
+              state.lives -= 1;
+              state.shakeTime = 0.25;
+              spawnParticles(player.x, player.y, "#ff6868", 16);
+              beep(120, 0.15, "sawtooth", 0.08);
+              if (state.lives <= 0) {
+                state.running = false;
+                if (state.level > state.stats.bestLevel) {
+                  state.stats.bestLevel = state.level;
+                  saveStats();
+                  refreshMenu();
+                }
+                showGameOverMenu();
+              }
+            }
+          }
+        }
+      }
     }
 
     function updatePowerUps(dt) {
@@ -847,7 +1046,12 @@
         state.score += 200;
         invaderGrid.speed += 8;
         invaderGrid.direction = 1;
-        resetGrid();
+        if (state.level % 3 === 0) {
+          invaderGrid.invaders = [];
+          spawnBoss();
+        } else {
+          resetGrid();
+        }
         beep(880, 0.12, "triangle", 0.06);
         if (state.level > state.stats.bestLevel) {
           state.stats.bestLevel = state.level;
@@ -897,6 +1101,9 @@
     function updateStatsNotice(dt) {
       if (state.statsNoticeTime > 0) {
         state.statsNoticeTime = Math.max(0, state.statsNoticeTime - dt);
+        if (state.statsNoticeTime === 0 && state.inMenu) {
+          refreshMenu();
+        }
       }
     }
 
@@ -1002,6 +1209,41 @@
       ctx.restore();
     }
 
+    function drawBoss() {
+      if (!state.bossActive) return;
+      ctx.save();
+      ctx.translate(boss.x, boss.y);
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = "transparent";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "64px system-ui, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\"";
+      ctx.fillText("😈", 0, 0);
+      ctx.restore();
+    }
+
+    function drawBossAttacks() {
+      if (!state.bossActive) return;
+      if (state.bossLaser) {
+        const laserY = boss.y + boss.size / 2;
+        ctx.save();
+        ctx.strokeStyle = state.bossLaser.warn > 0 ? "rgba(255, 120, 120, 0.5)" : "rgba(255, 80, 80, 0.9)";
+        ctx.lineWidth = state.bossLaser.warn > 0 ? 2 : 5;
+        ctx.beginPath();
+        ctx.moveTo(20, laserY);
+        ctx.lineTo(canvas.width - 20, laserY);
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.fillStyle = "#ff8a3a";
+      state.bossShots.forEach((shot) => {
+        ctx.beginPath();
+        ctx.arc(shot.x, shot.y, shot.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
     function drawShots() {
       ctx.fillStyle = "#f9a23a";
       state.playerShots.forEach((shot) => {
@@ -1057,6 +1299,19 @@
       ctx.fillText(`Music: ${audio.musicEnabled ? "ON" : "OFF"}`, canvas.width - 170, 44);
       const audioState = audio.ctx ? audio.ctx.state : "suspended";
       ctx.fillText(`AUDIO: ${audioState === "running" ? "OK" : "LOCKED"}`, canvas.width - 170, 64);
+      if (state.bossActive) {
+        const barWidth = 220;
+        const barX = canvas.width / 2 - barWidth / 2;
+        const barY = 20;
+        ctx.fillStyle = "rgba(80,0,0,0.6)";
+        ctx.fillRect(barX, barY, barWidth, 10);
+        ctx.fillStyle = "#ff5d5d";
+        ctx.fillRect(barX, barY, barWidth * (boss.hp / boss.maxHp), 10);
+        ctx.strokeStyle = "rgba(255,255,255,0.6)";
+        ctx.strokeRect(barX, barY, barWidth, 10);
+        ctx.fillStyle = "rgba(255,255,255,0.85)";
+        ctx.fillText("BOSS", barX + barWidth + 8, barY + 10);
+      }
 
       ctx.fillStyle = "rgba(255,255,255,0.75)";
       const timers = state.powerTimers;
@@ -1107,6 +1362,20 @@
           ctx.fillText("Pulsa R para reiniciar", canvas.width / 2 - 95, canvas.height / 2 + 30);
         }
       }
+      if (state.bossIncomingTime > 0) {
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#ffd8d8";
+        ctx.font = "bold 28px Trebuchet MS";
+        ctx.fillText("BOSS INCOMING", canvas.width / 2 - 110, canvas.height / 2);
+      }
+      if (state.bossDefeatedTime > 0) {
+        ctx.fillStyle = "rgba(0,0,0,0.4)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#ffd8d8";
+        ctx.font = "bold 28px Trebuchet MS";
+        ctx.fillText("BOSS DEFEATED", canvas.width / 2 - 105, canvas.height / 2);
+      }
     }
 
     function drawPauseOverlay() {
@@ -1148,20 +1417,33 @@
 
       updateStatsNotice(dt);
       if (state.running && !state.paused && !state.inMenu) {
-        updatePlayer(dt);
-        updateInvaders(dt);
-        checkInvaderGroundCollision();
-        updateShots(dt);
-        updatePowerUps(dt);
-        updateParticles(dt);
-        updatePowerTimers(dt);
-        updateHighScore(dt);
-        handleCollisions();
-        advanceLevelIfNeeded();
+        updateBoss(dt);
+        if (state.bossIncomingTime === 0) {
+          updatePlayer(dt);
+          if (!state.bossActive && state.bossDefeatedTime === 0) {
+            updateInvaders(dt);
+            checkInvaderGroundCollision();
+          } else {
+            checkBossGroundCollision();
+          }
+          updateShots(dt);
+          updatePowerUps(dt);
+          updateParticles(dt);
+          updatePowerTimers(dt);
+          updateHighScore(dt);
+          handleCollisions();
+          if (!state.bossActive && state.bossDefeatedTime === 0) {
+            advanceLevelIfNeeded();
+          }
+        }
       }
 
       drawPlayer();
-      invaderGrid.invaders.forEach((invader) => invader.alive && drawInvader(invader));
+      if (!state.bossActive && state.bossIncomingTime === 0 && state.bossDefeatedTime === 0) {
+        invaderGrid.invaders.forEach((invader) => invader.alive && drawInvader(invader));
+      }
+      drawBoss();
+      drawBossAttacks();
       drawShots();
       drawPowerUps();
       drawParticles();

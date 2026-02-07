@@ -327,6 +327,7 @@
         pressRestart: "Pulsa R para reiniciar",
         pressMenu: "R para reiniciar • M para menú",
         pressResume: "Pulsa P para continuar",
+        pauseTouchResume: "Toca PAUSA para continuar",
         bossIncoming: "JEFE ENTRANTE",
         bossDefeated: "JEFE DERROTADO",
         boss: "JEFE",
@@ -375,6 +376,7 @@
         pressRestart: "Press R to restart",
         pressMenu: "R to restart • M for menu",
         pressResume: "Press P to resume",
+        pauseTouchResume: "Tap PAUSE to continue",
         bossIncoming: "BOSS INCOMING",
         bossDefeated: "BOSS DEFEATED",
         boss: "BOSS",
@@ -676,8 +678,18 @@
       return coarsePointer || "ontouchstart" in window || navigator.maxTouchPoints > 0;
     }
 
+    function isMobileUI() {
+      const coarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+      const hoverNone = window.matchMedia && window.matchMedia("(hover: none)").matches;
+      const touchPoints = navigator.maxTouchPoints > 0;
+      const standaloneMode =
+        (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
+        window.navigator.standalone === true;
+      return standaloneMode || coarsePointer || hoverNone || touchPoints;
+    }
+
     function updateControlHints() {
-      const isTouch = isTouchDevice();
+      const isTouch = isMobileUI();
       [gameSubtitle, hudControls, menuSubtitle, gameoverSubtitle, menuStatsReset].forEach((element) => {
         if (!element) return;
         element.classList.toggle("hidden", isTouch);
@@ -1845,12 +1857,16 @@
       ctx.font = "bold 36px Trebuchet MS";
       ctx.fillText(t("paused"), canvas.width / 2 - 70, canvas.height / 2);
       ctx.font = "16px Trebuchet MS";
-      ctx.fillText(t("pressResume"), canvas.width / 2 - 100, canvas.height / 2 + 28);
-      ctx.fillText(
-        tf("crtPause", { state: state.crtEnabled ? t("on") : t("off") }),
-        canvas.width / 2 - 70,
-        canvas.height / 2 + 50
-      );
+      if (isMobileUI()) {
+        ctx.fillText(t("pauseTouchResume"), canvas.width / 2 - 115, canvas.height / 2 + 28);
+      } else {
+        ctx.fillText(t("pressResume"), canvas.width / 2 - 100, canvas.height / 2 + 28);
+        ctx.fillText(
+          tf("crtPause", { state: state.crtEnabled ? t("on") : t("off") }),
+          canvas.width / 2 - 70,
+          canvas.height / 2 + 50
+        );
+      }
     }
 
     function applyScreenShake(dt) {

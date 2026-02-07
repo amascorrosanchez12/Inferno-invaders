@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-labelledby="title desc" role="img">
+  <title>Inferno Invaders</title>
+  <desc>Infernal flame and horned mask icon</desc>
+  <defs>
+    <linearGradient id="flame" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#ffb347"/>
+      <stop offset="55%" stop-color="#ff4b2b"/>
+      <stop offset="100%" stop-color="#7a0000"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="#120000"/>
+  <path
+    d="M256 80c48 46 66 90 66 136 0 46-22 76-52 100 34-6 62-26 84-54 34 64 20 150-44 198-24 18-54 28-86 28-32 0-62-10-86-28-64-48-78-134-44-198 22 28 50 48 84 54-30-24-52-54-52-100 0-46 18-90 66-136 6 34 30 64 32 64s26-30 32-64Z"
+    fill="url(#flame)"
+  />
+  <path
+    d="M144 178c30 8 52 22 64 40-14 2-28 6-40 12-12-18-32-32-64-40 8-8 22-12 40-12Z"
+    fill="#ffb347"
+  />
+  <path
+    d="M368 178c-30 8-52 22-64 40 14 2 28 6 40 12 12-18 32-32 64-40-8-8-22-12-40-12Z"
+    fill="#ffb347"
+  />
+  <path
+    d="M178 322c20 34 46 52 78 52s58-18 78-52c-24 6-50 10-78 10s-54-4-78-10Z"
+    fill="#2b0000"
+    opacity="0.6"
+  />
+</svg>

@@ -1321,28 +1321,28 @@
     function drawCrtOverlay() {
       if (!state.crtEnabled) return;
       ctx.save();
-      ctx.globalAlpha = 0.08;
+      ctx.globalAlpha = 0.05;
       // Soft scanlines.
-      ctx.fillStyle = "rgba(0, 0, 0, 0.25)";
-      for (let y = 0; y < canvas.height; y += 4) {
+      ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
+      for (let y = 0; y < canvas.height; y += 5) {
         ctx.fillRect(0, y, canvas.width, 1);
       }
       // Light vignette without crushing sprites.
       const vignette = ctx.createRadialGradient(
         canvas.width / 2,
         canvas.height / 2,
-        canvas.width * 0.1,
+        canvas.width * 0.2,
         canvas.width / 2,
         canvas.height / 2,
-        canvas.width * 0.75
+        canvas.width * 0.85
       );
       vignette.addColorStop(0, "rgba(0,0,0,0)");
-      vignette.addColorStop(1, "rgba(0,0,0,0.18)");
+      vignette.addColorStop(1, "rgba(0,0,0,0.12)");
       ctx.fillStyle = vignette;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       // Gentle flicker tint.
-      ctx.globalAlpha = 0.06;
-      ctx.fillStyle = `rgba(255, 40, 40, ${0.06 + Math.random() * 0.03})`;
+      ctx.globalAlpha = 0.04;
+      ctx.fillStyle = `rgba(255, 40, 40, ${0.04 + Math.random() * 0.02})`;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.restore();
     }

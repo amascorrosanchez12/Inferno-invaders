@@ -697,9 +697,9 @@
           button.classList.add("is-pressed");
           return;
         }
-        if (action === "pause") handlePauseAction();
-        if (action === "restart") handleRestartAction();
-        if (action === "mute") handleMuteAction();
+        if (action === "pause") togglePause();
+        if (action === "restart") restartGame();
+        if (action === "mute") toggleMute();
         button.classList.add("is-pressed");
       };
       const release = (event) => {
@@ -709,13 +709,15 @@
         }
         button.classList.remove("is-pressed");
       };
-      button.addEventListener("pointerdown", (event) => {
-        press(event);
-        button.setPointerCapture(event.pointerId);
-      });
-      button.addEventListener("pointerup", release);
-      button.addEventListener("pointercancel", release);
-      button.addEventListener("pointerleave", release);
+      if (action === "left" || action === "right" || action === "shoot") {
+        button.addEventListener("pointerdown", (event) => {
+          press(event);
+          button.setPointerCapture(event.pointerId);
+        });
+        button.addEventListener("pointerup", release);
+        button.addEventListener("pointercancel", release);
+        button.addEventListener("pointerleave", release);
+      }
       button.addEventListener("touchstart", press, { passive: false });
       button.addEventListener("touchend", release, { passive: false });
       button.addEventListener("touchcancel", release, { passive: false });
@@ -849,7 +851,7 @@
       refreshMenu();
     }
 
-    function handleRestartAction() {
+    function restartGame() {
       if (!state.running && !state.inMenu) {
         resetGame();
         state.inMenu = false;
@@ -860,7 +862,7 @@
       }
     }
 
-    function handlePauseAction() {
+    function togglePause() {
       if (state.running) {
         state.paused = !state.paused;
       }
@@ -1846,7 +1848,7 @@
     musicVolLow.addEventListener("click", () => setMusicVolume(0.18));
     musicVolMid.addEventListener("click", () => setMusicVolume(0.35));
     musicVolHigh.addEventListener("click", () => setMusicVolume(0.6));
-    restartButton.addEventListener("click", handleRestartAction);
+    restartButton.addEventListener("click", restartGame);
     menuButton.addEventListener("click", showMenu);
     musicButton.addEventListener("click", toggleMusic);
     crtButton.addEventListener("click", toggleCrt);
@@ -1864,10 +1866,10 @@
         initAudio();
       }
       if (event.code === "KeyR") {
-        handleRestartAction();
+        restartGame();
       }
       if (event.code === "KeyP") {
-        handlePauseAction();
+        togglePause();
       }
       if (event.code === "KeyM") {
         handleMuteAction();

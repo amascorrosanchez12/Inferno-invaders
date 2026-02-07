@@ -476,6 +476,9 @@
       const storedCrt = localStorage.getItem(CRT_ON_KEY);
       if (storedCrt !== null) {
         state.crtEnabled = storedCrt === "true";
+      } else {
+        state.crtEnabled = false;
+        localStorage.setItem(CRT_ON_KEY, "false");
       }
     }
 

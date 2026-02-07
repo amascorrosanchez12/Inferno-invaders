@@ -977,6 +977,7 @@
     function restartGame() {
       gameState.restarting = true;
       setPaused(false);
+      gameState.paused = false;
       if (!state.running && !state.inMenu) {
         resetGame();
         state.inMenu = false;

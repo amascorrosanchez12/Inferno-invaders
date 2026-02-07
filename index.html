@@ -493,6 +493,7 @@
       restarting: false,
       inMenu: false,
     };
+    console.log("STATE:", gameState);
 
     const keys = {
       left: false,
@@ -820,7 +821,7 @@
           button.classList.add("is-pressed");
           return;
         }
-        if (action === "pause") togglePause();
+        if (action === "pause") onPauseButton();
         if (action === "restart") restartGame();
         if (action === "mute") toggleMute();
         button.classList.add("is-pressed");
@@ -1965,6 +1966,7 @@
     }
 
     function updateGame(dt) {
+      // Skip gameplay updates while paused.
       if (gameState.paused) return;
       if (state.running && !state.inMenu) {
         updateBoss(dt);

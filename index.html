@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#7a0000" />
   <title>Inferno Invaders</title>
   <link rel="manifest" href="./manifest.webmanifest" />
@@ -241,6 +241,14 @@
     // ============================
     const canvas = document.getElementById("game");
     const ctx = canvas.getContext("2d");
+    const BASE_WIDTH = 720;
+    const BASE_HEIGHT = 540;
+
+    function resizeCanvas() {
+      const scale = Math.min(window.innerWidth / BASE_WIDTH, window.innerHeight / BASE_HEIGHT);
+      canvas.style.width = `${Math.floor(BASE_WIDTH * scale)}px`;
+      canvas.style.height = `${Math.floor(BASE_HEIGHT * scale)}px`;
+    }
 
     const i18n = {
       es: {
@@ -976,6 +984,8 @@
     }
 
     init();
+    resizeCanvas();
+    window.addEventListener("resize", resizeCanvas);
 
     function spawnPlayerShot() {
       const speed = 380;

@@ -1002,6 +1002,10 @@
       updateControlHints();
     }
 
+    function resumeGame() {
+      setPaused(false);
+    }
+
     function handleMuteAction() {
       if (!state.running && !state.inMenu) {
         showMenu();

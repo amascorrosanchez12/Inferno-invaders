@@ -474,9 +474,7 @@
         audio.musicVolume = storedVol;
       }
       const storedCrt = localStorage.getItem(CRT_ON_KEY);
-      if (storedCrt !== null) {
-        state.crtEnabled = storedCrt === "true";
-      }
+      state.crtEnabled = storedCrt === "true";
     }
 
     function saveMusicSettings() {

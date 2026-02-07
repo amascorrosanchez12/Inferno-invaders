@@ -243,6 +243,7 @@
     const ctx = canvas.getContext("2d");
     const BASE_WIDTH = 720;
     const BASE_HEIGHT = 540;
+    let touchControlsInitialized = false;
 
     function resizeCanvas() {
       const scale = Math.min(window.innerWidth / BASE_WIDTH, window.innerHeight / BASE_HEIGHT);
@@ -524,8 +525,14 @@
       }
       const storedCrt = localStorage.getItem(CRT_ON_KEY);
       state.crtEnabled = storedCrt === "true";
+      if (storedCrt === null) {
+        localStorage.setItem(CRT_ON_KEY, "false");
+      }
       const storedOverlay = localStorage.getItem(OVERLAY_ON_KEY);
       state.debugOverlay = storedOverlay === "true";
+      if (storedOverlay === null) {
+        localStorage.setItem(OVERLAY_ON_KEY, "false");
+      }
     }
 
     function saveMusicSettings() {
@@ -626,16 +633,18 @@
       }
       mobileControls.classList.remove("hidden");
       let mainControls = mobileControls.querySelector(".mobile-controls-main");
-      if (!mainControls) {
-        mainControls = document.createElement("div");
-        mainControls.className = "mobile-controls-main";
-        mobileControls.prepend(mainControls);
-      }
       let auxControls = mobileControls.querySelector(".mobile-controls-aux");
-      if (!auxControls) {
-        auxControls = document.createElement("div");
-        auxControls.className = "mobile-controls-aux";
-        mobileControls.appendChild(auxControls);
+      if (!touchControlsInitialized) {
+        if (!mainControls) {
+          mainControls = document.createElement("div");
+          mainControls.className = "mobile-controls-main";
+          mobileControls.prepend(mainControls);
+        }
+        if (!auxControls) {
+          auxControls = document.createElement("div");
+          auxControls.className = "mobile-controls-aux";
+          mobileControls.appendChild(auxControls);
+        }
       }
       const mainButtons = [
         { action: "left", label: "←" },
@@ -643,19 +652,15 @@
         { action: "shoot", label: "✦", className: "mobile-btn--shoot" },
       ];
       mainButtons.forEach(({ action, label, className }) => {
-        let button = mainControls.querySelector(`[data-action="${action}"]`);
-        if (!button) {
-          button = document.createElement("button");
-          button.className = "mobile-btn";
-          button.type = "button";
-          button.dataset.action = action;
-          button.textContent = label;
-          if (className) button.classList.add(className);
-          mainControls.appendChild(button);
-        }
-        if (!button.dataset.bound) {
-          bindMobileButton(button);
-          button.dataset.bound = "true";
+        const button = mainControls && mainControls.querySelector(`[data-action="${action}"]`);
+        if (!button) return;
+        button.textContent = label;
+        if (className) button.classList.add(className);
+        if (!touchControlsInitialized) {
+          if (!button.dataset.bound) {
+            bindMobileButton(button);
+            button.dataset.bound = "true";
+          }
         }
       });
       const auxButtons = [
@@ -664,22 +669,17 @@
         { action: "mute", label: t("muteLabel") },
       ];
       auxButtons.forEach(({ action, label }) => {
-        let button = auxControls.querySelector(`[data-action="${action}"]`);
-        if (!button) {
-          button = document.createElement("button");
-          button.className = "mobile-btn mobile-btn--aux";
-          button.type = "button";
-          button.dataset.action = action;
-          button.textContent = label;
-          auxControls.appendChild(button);
-        } else {
-          button.textContent = label;
-        }
-        if (!button.dataset.bound) {
-          bindMobileButton(button);
-          button.dataset.bound = "true";
+        const button = auxControls && auxControls.querySelector(`[data-action="${action}"]`);
+        if (!button) return;
+        button.textContent = label;
+        if (!touchControlsInitialized) {
+          if (!button.dataset.bound) {
+            bindMobileButton(button);
+            button.dataset.bound = "true";
+          }
         }
       });
+      touchControlsInitialized = true;
     }
 
     function setMobileControl(action, pressed) {

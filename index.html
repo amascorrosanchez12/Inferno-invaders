@@ -1006,6 +1006,11 @@
       setPaused(false);
     }
 
+    function pauseGame() {
+      if (gameState.restarting) return;
+      setPaused(true);
+    }
+
     function handleMuteAction() {
       if (!state.running && !state.inMenu) {
         showMenu();

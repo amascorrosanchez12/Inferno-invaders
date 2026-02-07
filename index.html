@@ -126,6 +126,8 @@
       width: min(92vw, 520px);
       margin: 0 auto;
       touch-action: none;
+      position: relative;
+      z-index: 5;
     }
     .mobile-controls.hidden {
       display: none;
@@ -569,6 +571,39 @@
       langButton.textContent = `${t("language")}: ${lang.toUpperCase()}`;
     }
 
+    function isTouchDevice() {
+      return "ontouchstart" in window || navigator.maxTouchPoints > 0;
+    }
+
+    function ensureTouchControls() {
+      if (!mobileControls) return;
+      if (!isTouchDevice()) {
+        mobileControls.classList.add("hidden");
+        return;
+      }
+      mobileControls.classList.remove("hidden");
+      const buttons = [
+        { action: "left", label: "←" },
+        { action: "shoot", label: "✦" },
+        { action: "right", label: "→" },
+      ];
+      buttons.forEach(({ action, label }) => {
+        let button = mobileControls.querySelector(`[data-action="${action}"]`);
+        if (!button) {
+          button = document.createElement("button");
+          button.className = "mobile-btn";
+          button.type = "button";
+          button.dataset.action = action;
+          button.textContent = label;
+          mobileControls.appendChild(button);
+        }
+        if (!button.dataset.bound) {
+          bindMobileButton(button);
+          button.dataset.bound = "true";
+        }
+      });
+    }
+
     function setMobileControl(action, pressed) {
       if (action === "left") keys.left = pressed;
       if (action === "right") keys.right = pressed;
@@ -759,6 +794,7 @@
     }
 
     function resetGame() {
+      ensureTouchControls();
       state.running = true;
       state.gameOver = false;
       state.paused = false;
@@ -799,7 +835,7 @@
       keys.shoot = false;
       menuScreen.classList.remove("hidden");
       gameoverScreen.classList.add("hidden");
-      mobileControls.classList.add("hidden");
+      ensureTouchControls();
       refreshMenu();
     }
 
@@ -809,7 +845,7 @@
       state.inMenu = false;
       menuScreen.classList.add("hidden");
       gameoverScreen.classList.add("hidden");
-      mobileControls.classList.remove("hidden");
+      ensureTouchControls();
       handleFirstInteraction();
       // Audible test beep after user interaction to confirm volume.
       beep(880, 0.08, "triangle", 0.14);
@@ -820,17 +856,22 @@
 
     function showGameOverMenu() {
       gameoverScreen.classList.remove("hidden");
-      mobileControls.classList.add("hidden");
+      ensureTouchControls();
       refreshMenu();
     }
 
-    loadLang();
-    loadMusicSettings();
-    loadStats();
-    resetGame();
-    loadHighScore();
-    applyTranslations();
-    showMenu();
+    function init() {
+      loadLang();
+      loadMusicSettings();
+      loadStats();
+      resetGame();
+      loadHighScore();
+      applyTranslations();
+      showMenu();
+      ensureTouchControls();
+    }
+
+    init();
 
     function spawnPlayerShot() {
       const speed = 380;
@@ -1686,8 +1727,6 @@
     // First user input resumes AudioContext and starts music once.
     window.addEventListener("keydown", handleFirstInteraction, { once: true });
     window.addEventListener("click", handleFirstInteraction, { once: true });
-
-    mobileControls.querySelectorAll("[data-action]").forEach(bindMobileButton);
 
     playButton.addEventListener("click", startGame);
     musicVolLow.addEventListener("click", () => setMusicVolume(0.18));

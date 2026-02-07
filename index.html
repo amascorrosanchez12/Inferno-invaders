@@ -233,9 +233,9 @@
         pressRestart: "Pulsa R para reiniciar",
         pressMenu: "R para reiniciar • M para menú",
         pressResume: "Pulsa P para continuar",
-        bossIncoming: "BOSS INCOMING",
-        bossDefeated: "BOSS DEFEATED",
-        boss: "BOSS",
+        bossIncoming: "JEFE ENTRANTE",
+        bossDefeated: "JEFE DERROTADO",
+        boss: "JEFE",
         score: "Puntaje",
         lives: "Vidas",
         level: "Nivel",
@@ -246,8 +246,6 @@
         paused: "PAUSA",
         mute: "MUTE",
         statsResetHud: "Stats reiniciadas",
-        bossIncomingNotice: "BOSS INCOMING",
-        bossDefeatedNotice: "BOSS DEFEATED",
         devil: "DEVIL",
         crtPause: "CRT: {state} (C)",
         menu: "Menú",
@@ -292,8 +290,6 @@
         paused: "PAUSED",
         mute: "MUTE",
         statsResetHud: "Stats reset",
-        bossIncomingNotice: "BOSS INCOMING",
-        bossDefeatedNotice: "BOSS DEFEATED",
         devil: "DEVIL",
         crtPause: "CRT: {state} (C)",
         menu: "Menu",
@@ -1573,14 +1569,14 @@
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = "#ffd8d8";
         ctx.font = "bold 28px Trebuchet MS";
-        ctx.fillText(t("bossIncomingNotice"), canvas.width / 2 - 110, canvas.height / 2);
+        ctx.fillText(t("bossIncoming"), canvas.width / 2 - 110, canvas.height / 2);
       }
       if (state.bossDefeatedTime > 0) {
         ctx.fillStyle = "rgba(0,0,0,0.4)";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = "#ffd8d8";
         ctx.font = "bold 28px Trebuchet MS";
-        ctx.fillText(t("bossDefeatedNotice"), canvas.width / 2 - 105, canvas.height / 2);
+        ctx.fillText(t("bossDefeated"), canvas.width / 2 - 105, canvas.height / 2);
       }
     }
 

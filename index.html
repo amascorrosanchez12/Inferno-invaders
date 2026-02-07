@@ -11,14 +11,21 @@
     :root {
       color-scheme: dark;
     }
+    html,
     body {
       margin: 0;
+      height: 100%;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+      overscroll-behavior: none;
+    }
+    body {
       background: #050000;
       font-family: "Trebuchet MS", system-ui, sans-serif;
       display: grid;
       place-items: center;
       min-height: 100vh;
-      overscroll-behavior: none;
     }
     .wrap {
       display: grid;
@@ -178,6 +185,9 @@
         0 0 16px rgba(255, 120, 80, 0.65),
         inset 0 0 12px rgba(255, 160, 110, 0.5);
     }
+    .hidden {
+      display: none !important;
+    }
   </style>
 </head>
 <body>
@@ -198,6 +208,7 @@
       </div>
     </div>
     <div id="hud-controls" class="hud">Mover: ⬅️ ➡️ · Disparar: Espacio · Pausa: P · Mute: M · High Score: H · Reiniciar: R</div>
+    <div id="touch-hint" class="hud hidden"></div>
     <div id="menu-screen" class="screen">
       <div class="screen-card">
         <div id="menu-title" class="screen-title">Inferno Invaders</div>
@@ -256,6 +267,7 @@
         title: "Inferno Invaders",
         subtitle: "Dispara: Espacio • Mover: A/D o ←/→ • Reiniciar: R",
         hudControls: "Mover: ⬅️ ➡️ · Disparar: Espacio · Pausa: P · Mute: M · High Score: H · Reiniciar: R",
+        touchHint: "Usa los botones para moverte, disparar y pausar",
         menuSubtitle: "A/D o ←/→ para moverte • Espacio para disparar",
         play: "Jugar",
         music: "Música",
@@ -303,6 +315,7 @@
         title: "Inferno Invaders",
         subtitle: "Shoot: Space • Move: A/D or ←/→ • Restart: R",
         hudControls: "Move: ⬅️ ➡️ · Shoot: Space · Pause: P · Mute: M · High Score: H · Restart: R",
+        touchHint: "Use the buttons to move, shoot, and pause",
         menuSubtitle: "A/D or ←/→ to move • Space to shoot",
         play: "Play",
         music: "Music",
@@ -491,6 +504,7 @@
     const menuStatsReset = document.getElementById("menu-stats-reset");
     const gameoverTitle = document.getElementById("gameover-title");
     const gameoverSubtitle = document.getElementById("gameover-subtitle");
+    const touchHint = document.getElementById("touch-hint");
 
     // Persistent high score storage.
     const HIGH_SCORE_KEY = "infernoInvadersHighScore";
@@ -560,7 +574,9 @@
       musicVolLow.textContent = t("low");
       musicVolMid.textContent = t("mid");
       musicVolHigh.textContent = t("high");
+      if (touchHint) touchHint.textContent = t("touchHint");
       ensureTouchControls();
+      updateControlHints();
     }
 
     function toggleLang() {
@@ -622,11 +638,25 @@
     }
 
     function isTouchDevice() {
-      return "ontouchstart" in window || navigator.maxTouchPoints > 0;
+      const coarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+      return coarsePointer || "ontouchstart" in window || navigator.maxTouchPoints > 0;
+    }
+
+    function updateControlHints() {
+      const isTouch = isTouchDevice();
+      [gameSubtitle, hudControls, menuSubtitle, gameoverSubtitle, menuStatsReset].forEach((element) => {
+        if (!element) return;
+        element.classList.toggle("hidden", isTouch);
+      });
+      if (touchHint) {
+        touchHint.textContent = t("touchHint");
+        touchHint.classList.toggle("hidden", !isTouch);
+      }
     }
 
     function ensureTouchControls() {
       if (!mobileControls) return;
+      updateControlHints();
       if (!isTouchDevice()) {
         mobileControls.classList.add("hidden");
         return;
@@ -987,7 +1017,15 @@
 
     init();
     resizeCanvas();
-    window.addEventListener("resize", resizeCanvas);
+    window.addEventListener("resize", () => {
+      resizeCanvas();
+      updateControlHints();
+    });
+    ["gesturestart", "gesturechange", "gestureend"].forEach((eventName) => {
+      document.addEventListener(eventName, (event) => event.preventDefault(), { passive: false });
+    });
+    canvas.addEventListener("touchstart", (event) => event.preventDefault(), { passive: false });
+    canvas.addEventListener("touchmove", (event) => event.preventDefault(), { passive: false });
 
     function spawnPlayerShot() {
       const speed = 380;

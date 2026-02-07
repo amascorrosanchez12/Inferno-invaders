@@ -175,6 +175,7 @@
         <div id="menu-music">Music: ON</div>
         <div id="menu-music-vol">Music Vol: MID</div>
         <div id="menu-crt">CRT: OFF</div>
+        <div id="menu-overlay">Overlay: OFF</div>
         <div class="screen-actions">
           <button id="play-button" type="button">Jugar</button>
           <button id="music-button" type="button">Music: ON/OFF</button>
@@ -219,6 +220,7 @@
         music: "Música",
         musicToggle: "Música: {state}",
         crtToggle: "CRT: {state}",
+        overlayToggle: "Overlay: {state}",
         musicVol: "Vol música: {level}",
         on: "ON",
         off: "OFF",
@@ -263,6 +265,7 @@
         music: "Music",
         musicToggle: "Music: {state}",
         crtToggle: "CRT: {state}",
+        overlayToggle: "Overlay: {state}",
         musicVol: "Music Vol: {level}",
         on: "ON",
         off: "OFF",
@@ -324,7 +327,7 @@
       lives: 3,
       level: 1,
       paused: false,
-      debugOverlay: true,
+      debugOverlay: false,
       crtEnabled: false,
       bossActive: false,
       bossIncomingTime: 0,
@@ -426,6 +429,7 @@
     const menuMusic = document.getElementById("menu-music");
     const menuMusicVol = document.getElementById("menu-music-vol");
     const menuCrt = document.getElementById("menu-crt");
+    const menuOverlay = document.getElementById("menu-overlay");
     const menuLangNotice = document.getElementById("menu-lang-notice");
     const gameoverHighScore = document.getElementById("gameover-high-score");
     const mobileControls = document.getElementById("mobile-controls");
@@ -448,6 +452,7 @@
     const MUSIC_ON_KEY = "infernoInvadersMusicOn";
     const MUSIC_VOL_KEY = "infernoInvadersMusicVol";
     const CRT_ON_KEY = "infernoInvadersCrtOn";
+    const OVERLAY_ON_KEY = "infernoInvadersOverlayOn";
     const RUNS_KEY = "infernoInvadersRuns";
     const KILLS_KEY = "infernoInvadersKills";
     const BEST_LEVEL_KEY = "infernoInvadersBestLevel";
@@ -474,15 +479,19 @@
         audio.musicVolume = storedVol;
       }
       const storedCrt = localStorage.getItem(CRT_ON_KEY);
-      if (storedCrt !== null) {
-        state.crtEnabled = storedCrt === "true";
-      }
+      state.crtEnabled = storedCrt === "true";
+      const storedOverlay = localStorage.getItem(OVERLAY_ON_KEY);
+      state.debugOverlay = storedOverlay === "true";
     }
 
     function saveMusicSettings() {
       localStorage.setItem(MUSIC_ON_KEY, String(audio.musicEnabled));
       localStorage.setItem(MUSIC_VOL_KEY, String(audio.musicVolume));
       localStorage.setItem(CRT_ON_KEY, String(state.crtEnabled));
+    }
+
+    function saveOverlaySettings() {
+      localStorage.setItem(OVERLAY_ON_KEY, String(state.debugOverlay));
     }
 
     function applyTranslations() {
@@ -547,6 +556,9 @@
         level: audio.musicVolume <= 0.2 ? t("low") : audio.musicVolume <= 0.45 ? t("mid") : t("high"),
       });
       menuCrt.textContent = tf("crtToggle", { state: state.crtEnabled ? t("on") : t("off") });
+      if (menuOverlay) {
+        menuOverlay.textContent = tf("overlayToggle", { state: state.debugOverlay ? t("on") : t("off") });
+      }
       gameoverHighScore.textContent = `${t("highScore")}: ${state.highScore}`;
       const resetNote =
         state.statsNoticeTime > 0 ? t("statsReset") : t("statsResetHint");
@@ -712,6 +724,12 @@
     function toggleCrt() {
       state.crtEnabled = !state.crtEnabled;
       saveMusicSettings();
+      refreshMenu();
+    }
+
+    function toggleOverlay() {
+      state.debugOverlay = !state.debugOverlay;
+      saveOverlaySettings();
       refreshMenu();
     }
 
@@ -1323,28 +1341,28 @@
     function drawCrtOverlay() {
       if (!state.crtEnabled) return;
       ctx.save();
-      ctx.globalAlpha = 0.08;
+      ctx.globalAlpha = 0.05;
       // Soft scanlines.
-      ctx.fillStyle = "rgba(0, 0, 0, 0.25)";
-      for (let y = 0; y < canvas.height; y += 4) {
+      ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
+      for (let y = 0; y < canvas.height; y += 5) {
         ctx.fillRect(0, y, canvas.width, 1);
       }
       // Light vignette without crushing sprites.
       const vignette = ctx.createRadialGradient(
         canvas.width / 2,
         canvas.height / 2,
-        canvas.width * 0.1,
+        canvas.width * 0.2,
         canvas.width / 2,
         canvas.height / 2,
-        canvas.width * 0.75
+        canvas.width * 0.85
       );
       vignette.addColorStop(0, "rgba(0,0,0,0)");
-      vignette.addColorStop(1, "rgba(0,0,0,0.18)");
+      vignette.addColorStop(1, "rgba(0,0,0,0.12)");
       ctx.fillStyle = vignette;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       // Gentle flicker tint.
-      ctx.globalAlpha = 0.06;
-      ctx.fillStyle = `rgba(255, 40, 40, ${0.06 + Math.random() * 0.03})`;
+      ctx.globalAlpha = 0.04;
+      ctx.fillStyle = `rgba(255, 40, 40, ${0.04 + Math.random() * 0.02})`;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.restore();
     }
@@ -1740,7 +1758,7 @@
         refreshMenu();
       }
       if (event.code === "KeyV") {
-        state.debugOverlay = !state.debugOverlay;
+        toggleOverlay();
       }
     });
 

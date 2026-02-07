@@ -1012,6 +1012,14 @@
       setPaused(true);
     }
 
+    function onPauseButton() {
+      if (gameState.paused) {
+        resumeGame();
+      } else {
+        pauseGame();
+      }
+    }
+
     function handleMuteAction() {
       if (!state.running && !state.inMenu) {
         showMenu();

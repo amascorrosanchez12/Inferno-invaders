@@ -1,0 +1,25 @@
+{
+  "name": "Inferno Invaders",
+  "short_name": "Inferno",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#120000",
+  "theme_color": "#7a0000",
+  "description": "Infernal Space Invaders with bosses, CRT mode, and high score.",
+  "icons": [
+    {
+      "src": "./icons/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "maskable"
+    },
+    {
+      "src": "./icons/icon-512.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512",
+      "purpose": "any"
+    }
+  ]
+}

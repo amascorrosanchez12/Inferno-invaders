@@ -969,6 +969,9 @@
     }
 
     function restartGame() {
+      state.paused = false;
+      updatePauseButtonLabel();
+      updateControlHints();
       if (!state.running && !state.inMenu) {
         resetGame();
         state.inMenu = false;

@@ -1966,6 +1966,7 @@
     }
 
     function updateGame(dt) {
+      // Skip gameplay updates while paused.
       if (gameState.paused) return;
       if (state.running && !state.inMenu) {
         updateBoss(dt);

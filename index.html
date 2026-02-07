@@ -10,6 +10,10 @@
   <style>
     :root {
       color-scheme: dark;
+      --safe-top: env(safe-area-inset-top);
+      --safe-right: env(safe-area-inset-right);
+      --safe-bottom: env(safe-area-inset-bottom);
+      --safe-left: env(safe-area-inset-left);
     }
     html,
     body {
@@ -135,10 +139,11 @@
       width: auto;
       height: auto;
       margin: 0;
-      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
       box-sizing: border-box;
       z-index: 15;
       pointer-events: none;
+      transform-origin: top left;
     }
     .mobile-controls-main {
       position: absolute;
@@ -272,27 +277,36 @@
       const vw = window.visualViewport?.width ?? window.innerWidth;
       const vh = window.visualViewport?.height ?? window.innerHeight;
       const scale = Math.min(vw / BASE_WIDTH, vh / BASE_HEIGHT);
+      const uiScale = Math.min(1, Math.max(0.75, vw / 420));
       canvas.style.width = `${Math.floor(BASE_WIDTH * scale)}px`;
       canvas.style.height = `${Math.floor(BASE_HEIGHT * scale)}px`;
       canvas.style.display = "block";
       canvas.style.margin = "0 auto";
       if (!mobileControls) return;
       if (!isTouchDevice()) return;
+      const pad = 12;
+      const safeBottom =
+        parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue("--safe-bottom")
+        ) || 0;
       const rect = canvas.getBoundingClientRect();
       mobileControls.style.left = `${rect.left}px`;
       mobileControls.style.top = `${rect.top}px`;
-      mobileControls.style.width = `${rect.width}px`;
-      mobileControls.style.height = `${rect.height}px`;
+      mobileControls.style.width = `${rect.width / uiScale}px`;
+      mobileControls.style.height = `${rect.height / uiScale}px`;
+      mobileControls.style.transform = `scale(${uiScale})`;
       const mainControls = mobileControls.querySelector(".mobile-controls-main");
       const auxControls = mobileControls.querySelector(".mobile-controls-aux");
       if (mainControls) {
-        mainControls.style.left = "0";
-        mainControls.style.bottom = "0";
-        mainControls.style.right = "0";
+        const bottom = Math.max(pad, pad + safeBottom);
+        mainControls.style.left = `${pad}px`;
+        mainControls.style.right = `${pad}px`;
+        mainControls.style.bottom = `${bottom}px`;
       }
       if (auxControls) {
-        auxControls.style.right = "0";
-        auxControls.style.top = "35%";
+        auxControls.style.right = `${pad}px`;
+        auxControls.style.top = `${pad + 80}px`;
+        auxControls.style.gap = "8px";
       }
     }
 
@@ -1086,6 +1100,10 @@
         updateControlHints();
       });
     }
+    document.addEventListener("fullscreenchange", () => {
+      layoutAll();
+      updateControlHints();
+    });
     ["gesturestart", "gesturechange", "gestureend"].forEach((eventName) => {
       document.addEventListener(eventName, (event) => event.preventDefault(), { passive: false });
     });

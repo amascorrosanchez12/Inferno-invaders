@@ -1964,19 +1964,9 @@
       }
     }
 
-    function update(timestamp) {
-      // Clamp dt to avoid large jumps after tab switches or lag spikes.
-      const dt = Math.min((timestamp - state.lastTime) / 1000, 0.05);
-      state.lastTime = timestamp;
-
-      ctx.save();
-      drawBackground(dt);
-      if (!state.paused) {
-        applyScreenShake(dt);
-      }
-
-      updateStatsNotice(dt);
-      if (state.running && !state.paused && !state.inMenu) {
+    function updateGame(dt) {
+      if (gameState.paused) return;
+      if (state.running && !state.inMenu) {
         updateBoss(dt);
         if (state.bossIncomingTime === 0) {
           updatePlayer(dt);
@@ -1997,6 +1987,21 @@
           }
         }
       }
+    }
+
+    function update(timestamp) {
+      // Clamp dt to avoid large jumps after tab switches or lag spikes.
+      const dt = Math.min((timestamp - state.lastTime) / 1000, 0.05);
+      state.lastTime = timestamp;
+
+      ctx.save();
+      drawBackground(dt);
+      if (!state.paused) {
+        applyScreenShake(dt);
+      }
+
+      updateStatsNotice(dt);
+      updateGame(dt);
 
       drawPlayer();
       if (!state.bossActive && state.bossIncomingTime === 0 && state.bossDefeatedTime === 0) {

@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#7a0000" />
   <title>Inferno Invaders</title>
   <link rel="manifest" href="./manifest.webmanifest" />
@@ -121,11 +121,26 @@
     }
     .mobile-controls {
       display: grid;
-      grid-template-columns: repeat(3, minmax(72px, 1fr));
       gap: 10px;
       width: min(92vw, 520px);
       margin: 0 auto;
       touch-action: none;
+      position: relative;
+      z-index: 5;
+    }
+    .mobile-controls-main {
+      display: grid;
+      grid-template-columns: minmax(72px, 1fr) minmax(72px, 1fr) minmax(96px, 1.2fr);
+      gap: 10px;
+    }
+    .mobile-controls-aux {
+      position: absolute;
+      top: -6px;
+      right: 0;
+      display: flex;
+      gap: 6px;
+      opacity: 0.85;
+      z-index: 6;
     }
     .mobile-controls.hidden {
       display: none;
@@ -146,6 +161,16 @@
       user-select: none;
       transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
     }
+    .mobile-btn--shoot {
+      padding: 18px 8px;
+      font-size: 14px;
+    }
+    .mobile-btn--aux {
+      padding: 6px 8px;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      opacity: 0.9;
+    }
     .mobile-btn.is-pressed {
       transform: scale(0.96);
       filter: brightness(1.15);
@@ -161,9 +186,16 @@
     <div id="game-subtitle" class="subtitle">Space to shoot • A/D or ←/→ to move • R restart</div>
     <canvas id="game" width="720" height="540" aria-label="Inferno Invaders"></canvas>
     <div id="mobile-controls" class="mobile-controls hidden" aria-label="Controles táctiles">
-      <button class="mobile-btn" data-action="left" type="button">←</button>
-      <button class="mobile-btn" data-action="shoot" type="button">✦</button>
-      <button class="mobile-btn" data-action="right" type="button">→</button>
+      <div class="mobile-controls-main">
+        <button class="mobile-btn" data-action="left" type="button">←</button>
+        <button class="mobile-btn" data-action="right" type="button">→</button>
+        <button class="mobile-btn mobile-btn--shoot" data-action="shoot" type="button">✦</button>
+      </div>
+      <div class="mobile-controls-aux">
+        <button class="mobile-btn mobile-btn--aux" data-action="pause" type="button">Pausa</button>
+        <button class="mobile-btn mobile-btn--aux" data-action="restart" type="button">Reiniciar</button>
+        <button class="mobile-btn mobile-btn--aux" data-action="mute" type="button">Silencio</button>
+      </div>
     </div>
     <div id="hud-controls" class="hud">Mover: ⬅️ ➡️ · Disparar: Espacio · Pausa: P · Mute: M · High Score: H · Reiniciar: R</div>
     <div id="menu-screen" class="screen">
@@ -175,6 +207,7 @@
         <div id="menu-music">Music: ON</div>
         <div id="menu-music-vol">Music Vol: MID</div>
         <div id="menu-crt">CRT: OFF</div>
+        <div id="menu-overlay">Overlay: OFF</div>
         <div class="screen-actions">
           <button id="play-button" type="button">Jugar</button>
           <button id="music-button" type="button">Music: ON/OFF</button>
@@ -208,6 +241,15 @@
     // ============================
     const canvas = document.getElementById("game");
     const ctx = canvas.getContext("2d");
+    const BASE_WIDTH = 720;
+    const BASE_HEIGHT = 540;
+    let touchControlsInitialized = false;
+
+    function resizeCanvas() {
+      const scale = Math.min(window.innerWidth / BASE_WIDTH, window.innerHeight / BASE_HEIGHT);
+      canvas.style.width = `${Math.floor(BASE_WIDTH * scale)}px`;
+      canvas.style.height = `${Math.floor(BASE_HEIGHT * scale)}px`;
+    }
 
     const i18n = {
       es: {
@@ -219,6 +261,9 @@
         music: "Música",
         musicToggle: "Música: {state}",
         crtToggle: "CRT: {state}",
+        overlayToggle: "Overlay: {state}",
+        pauseLabel: "Pausa",
+        muteLabel: "Silencio",
         musicVol: "Vol música: {level}",
         on: "ON",
         off: "OFF",
@@ -263,6 +308,9 @@
         music: "Music",
         musicToggle: "Music: {state}",
         crtToggle: "CRT: {state}",
+        overlayToggle: "Overlay: {state}",
+        pauseLabel: "Pause",
+        muteLabel: "Mute",
         musicVol: "Music Vol: {level}",
         on: "ON",
         off: "OFF",
@@ -324,7 +372,7 @@
       lives: 3,
       level: 1,
       paused: false,
-      debugOverlay: true,
+      debugOverlay: false,
       crtEnabled: false,
       bossActive: false,
       bossIncomingTime: 0,
@@ -426,6 +474,7 @@
     const menuMusic = document.getElementById("menu-music");
     const menuMusicVol = document.getElementById("menu-music-vol");
     const menuCrt = document.getElementById("menu-crt");
+    const menuOverlay = document.getElementById("menu-overlay");
     const menuLangNotice = document.getElementById("menu-lang-notice");
     const gameoverHighScore = document.getElementById("gameover-high-score");
     const mobileControls = document.getElementById("mobile-controls");
@@ -448,6 +497,7 @@
     const MUSIC_ON_KEY = "infernoInvadersMusicOn";
     const MUSIC_VOL_KEY = "infernoInvadersMusicVol";
     const CRT_ON_KEY = "infernoInvadersCrtOn";
+    const OVERLAY_ON_KEY = "infernoInvadersOverlayOn";
     const RUNS_KEY = "infernoInvadersRuns";
     const KILLS_KEY = "infernoInvadersKills";
     const BEST_LEVEL_KEY = "infernoInvadersBestLevel";
@@ -474,8 +524,14 @@
         audio.musicVolume = storedVol;
       }
       const storedCrt = localStorage.getItem(CRT_ON_KEY);
-      if (storedCrt !== null) {
-        state.crtEnabled = storedCrt === "true";
+      state.crtEnabled = storedCrt === "true";
+      if (storedCrt === null) {
+        localStorage.setItem(CRT_ON_KEY, "false");
+      }
+      const storedOverlay = localStorage.getItem(OVERLAY_ON_KEY);
+      state.debugOverlay = storedOverlay === "true";
+      if (storedOverlay === null) {
+        localStorage.setItem(OVERLAY_ON_KEY, "false");
       }
     }
 
@@ -483,6 +539,10 @@
       localStorage.setItem(MUSIC_ON_KEY, String(audio.musicEnabled));
       localStorage.setItem(MUSIC_VOL_KEY, String(audio.musicVolume));
       localStorage.setItem(CRT_ON_KEY, String(state.crtEnabled));
+    }
+
+    function saveOverlaySettings() {
+      localStorage.setItem(OVERLAY_ON_KEY, String(state.debugOverlay));
     }
 
     function applyTranslations() {
@@ -500,6 +560,7 @@
       musicVolLow.textContent = t("low");
       musicVolMid.textContent = t("mid");
       musicVolHigh.textContent = t("high");
+      ensureTouchControls();
     }
 
     function toggleLang() {
@@ -547,6 +608,9 @@
         level: audio.musicVolume <= 0.2 ? t("low") : audio.musicVolume <= 0.45 ? t("mid") : t("high"),
       });
       menuCrt.textContent = tf("crtToggle", { state: state.crtEnabled ? t("on") : t("off") });
+      if (menuOverlay) {
+        menuOverlay.textContent = tf("overlayToggle", { state: state.debugOverlay ? t("on") : t("off") });
+      }
       gameoverHighScore.textContent = `${t("highScore")}: ${state.highScore}`;
       const resetNote =
         state.statsNoticeTime > 0 ? t("statsReset") : t("statsResetHint");
@@ -555,6 +619,67 @@
         menuLangNotice.textContent = state.langNoticeTime > 0 ? t("languageNotice") : "";
       }
       langButton.textContent = `${t("language")}: ${lang.toUpperCase()}`;
+    }
+
+    function isTouchDevice() {
+      return "ontouchstart" in window || navigator.maxTouchPoints > 0;
+    }
+
+    function ensureTouchControls() {
+      if (!mobileControls) return;
+      if (!isTouchDevice()) {
+        mobileControls.classList.add("hidden");
+        return;
+      }
+      mobileControls.classList.remove("hidden");
+      let mainControls = mobileControls.querySelector(".mobile-controls-main");
+      let auxControls = mobileControls.querySelector(".mobile-controls-aux");
+      if (!touchControlsInitialized) {
+        if (!mainControls) {
+          mainControls = document.createElement("div");
+          mainControls.className = "mobile-controls-main";
+          mobileControls.prepend(mainControls);
+        }
+        if (!auxControls) {
+          auxControls = document.createElement("div");
+          auxControls.className = "mobile-controls-aux";
+          mobileControls.appendChild(auxControls);
+        }
+      }
+      const mainButtons = [
+        { action: "left", label: "←" },
+        { action: "right", label: "→" },
+        { action: "shoot", label: "✦", className: "mobile-btn--shoot" },
+      ];
+      mainButtons.forEach(({ action, label, className }) => {
+        const button = mainControls && mainControls.querySelector(`[data-action="${action}"]`);
+        if (!button) return;
+        button.textContent = label;
+        if (className) button.classList.add(className);
+        if (!touchControlsInitialized) {
+          if (!button.dataset.bound) {
+            bindMobileButton(button);
+            button.dataset.bound = "true";
+          }
+        }
+      });
+      const auxButtons = [
+        { action: "pause", label: t("pauseLabel") },
+        { action: "restart", label: t("restart") },
+        { action: "mute", label: t("muteLabel") },
+      ];
+      auxButtons.forEach(({ action, label }) => {
+        const button = auxControls && auxControls.querySelector(`[data-action="${action}"]`);
+        if (!button) return;
+        button.textContent = label;
+        if (!touchControlsInitialized) {
+          if (!button.dataset.bound) {
+            bindMobileButton(button);
+            button.dataset.bound = "true";
+          }
+        }
+      });
+      touchControlsInitialized = true;
     }
 
     function setMobileControl(action, pressed) {
@@ -567,21 +692,32 @@
       const action = button.dataset.action;
       const press = (event) => {
         event.preventDefault();
-        setMobileControl(action, true);
+        if (action === "left" || action === "right" || action === "shoot") {
+          setMobileControl(action, true);
+          button.classList.add("is-pressed");
+          return;
+        }
+        if (action === "pause") togglePause();
+        if (action === "restart") restartGame();
+        if (action === "mute") toggleMute();
         button.classList.add("is-pressed");
       };
       const release = (event) => {
         event.preventDefault();
-        setMobileControl(action, false);
+        if (action === "left" || action === "right" || action === "shoot") {
+          setMobileControl(action, false);
+        }
         button.classList.remove("is-pressed");
       };
-      button.addEventListener("pointerdown", (event) => {
-        press(event);
-        button.setPointerCapture(event.pointerId);
-      });
-      button.addEventListener("pointerup", release);
-      button.addEventListener("pointercancel", release);
-      button.addEventListener("pointerleave", release);
+      if (action === "left" || action === "right" || action === "shoot") {
+        button.addEventListener("pointerdown", (event) => {
+          press(event);
+          button.setPointerCapture(event.pointerId);
+        });
+        button.addEventListener("pointerup", release);
+        button.addEventListener("pointercancel", release);
+        button.addEventListener("pointerleave", release);
+      }
       button.addEventListener("touchstart", press, { passive: false });
       button.addEventListener("touchend", release, { passive: false });
       button.addEventListener("touchcancel", release, { passive: false });
@@ -715,6 +851,37 @@
       refreshMenu();
     }
 
+    function restartGame() {
+      if (!state.running && !state.inMenu) {
+        resetGame();
+        state.inMenu = false;
+        gameoverScreen.classList.add("hidden");
+        handleFirstInteraction();
+      } else {
+        resetGame();
+      }
+    }
+
+    function togglePause() {
+      if (state.running) {
+        state.paused = !state.paused;
+      }
+    }
+
+    function handleMuteAction() {
+      if (!state.running && !state.inMenu) {
+        showMenu();
+      } else {
+        toggleMute();
+      }
+    }
+
+    function toggleOverlay() {
+      state.debugOverlay = !state.debugOverlay;
+      saveOverlaySettings();
+      refreshMenu();
+    }
+
     function handleFirstInteraction() {
       // Initialize/resume AudioContext and start music once after user input.
       initAudio();
@@ -741,6 +908,7 @@
     }
 
     function resetGame() {
+      ensureTouchControls();
       state.running = true;
       state.gameOver = false;
       state.paused = false;
@@ -781,7 +949,7 @@
       keys.shoot = false;
       menuScreen.classList.remove("hidden");
       gameoverScreen.classList.add("hidden");
-      mobileControls.classList.add("hidden");
+      ensureTouchControls();
       refreshMenu();
     }
 
@@ -791,7 +959,7 @@
       state.inMenu = false;
       menuScreen.classList.add("hidden");
       gameoverScreen.classList.add("hidden");
-      mobileControls.classList.remove("hidden");
+      ensureTouchControls();
       handleFirstInteraction();
       // Audible test beep after user interaction to confirm volume.
       beep(880, 0.08, "triangle", 0.14);
@@ -802,17 +970,24 @@
 
     function showGameOverMenu() {
       gameoverScreen.classList.remove("hidden");
-      mobileControls.classList.add("hidden");
+      ensureTouchControls();
       refreshMenu();
     }
 
-    loadLang();
-    loadMusicSettings();
-    loadStats();
-    resetGame();
-    loadHighScore();
-    applyTranslations();
-    showMenu();
+    function init() {
+      loadLang();
+      loadMusicSettings();
+      loadStats();
+      resetGame();
+      loadHighScore();
+      applyTranslations();
+      showMenu();
+      ensureTouchControls();
+    }
+
+    init();
+    resizeCanvas();
+    window.addEventListener("resize", resizeCanvas);
 
     function spawnPlayerShot() {
       const speed = 380;
@@ -1323,28 +1498,28 @@
     function drawCrtOverlay() {
       if (!state.crtEnabled) return;
       ctx.save();
-      ctx.globalAlpha = 0.08;
+      ctx.globalAlpha = 0.05;
       // Soft scanlines.
-      ctx.fillStyle = "rgba(0, 0, 0, 0.25)";
-      for (let y = 0; y < canvas.height; y += 4) {
+      ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
+      for (let y = 0; y < canvas.height; y += 5) {
         ctx.fillRect(0, y, canvas.width, 1);
       }
       // Light vignette without crushing sprites.
       const vignette = ctx.createRadialGradient(
         canvas.width / 2,
         canvas.height / 2,
-        canvas.width * 0.1,
+        canvas.width * 0.2,
         canvas.width / 2,
         canvas.height / 2,
-        canvas.width * 0.75
+        canvas.width * 0.85
       );
       vignette.addColorStop(0, "rgba(0,0,0,0)");
-      vignette.addColorStop(1, "rgba(0,0,0,0.18)");
+      vignette.addColorStop(1, "rgba(0,0,0,0.12)");
       ctx.fillStyle = vignette;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       // Gentle flicker tint.
-      ctx.globalAlpha = 0.06;
-      ctx.fillStyle = `rgba(255, 40, 40, ${0.06 + Math.random() * 0.03})`;
+      ctx.globalAlpha = 0.04;
+      ctx.fillStyle = `rgba(255, 40, 40, ${0.04 + Math.random() * 0.02})`;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.restore();
     }
@@ -1669,18 +1844,11 @@
     window.addEventListener("keydown", handleFirstInteraction, { once: true });
     window.addEventListener("click", handleFirstInteraction, { once: true });
 
-    mobileControls.querySelectorAll("[data-action]").forEach(bindMobileButton);
-
     playButton.addEventListener("click", startGame);
     musicVolLow.addEventListener("click", () => setMusicVolume(0.18));
     musicVolMid.addEventListener("click", () => setMusicVolume(0.35));
     musicVolHigh.addEventListener("click", () => setMusicVolume(0.6));
-    restartButton.addEventListener("click", () => {
-      resetGame();
-      state.inMenu = false;
-      gameoverScreen.classList.add("hidden");
-      handleFirstInteraction();
-    });
+    restartButton.addEventListener("click", restartGame);
     menuButton.addEventListener("click", showMenu);
     musicButton.addEventListener("click", toggleMusic);
     crtButton.addEventListener("click", toggleCrt);
@@ -1698,26 +1866,13 @@
         initAudio();
       }
       if (event.code === "KeyR") {
-        if (!state.running && !state.inMenu) {
-          resetGame();
-          state.inMenu = false;
-          gameoverScreen.classList.add("hidden");
-          handleFirstInteraction();
-        } else {
-          resetGame();
-        }
+        restartGame();
       }
       if (event.code === "KeyP") {
-        if (state.running) {
-          state.paused = !state.paused;
-        }
+        togglePause();
       }
       if (event.code === "KeyM") {
-        if (!state.running && !state.inMenu) {
-          showMenu();
-        } else {
-          toggleMute();
-        }
+        handleMuteAction();
       }
       if (event.code === "KeyC") {
         toggleCrt();
@@ -1740,7 +1895,7 @@
         refreshMenu();
       }
       if (event.code === "KeyV") {
-        state.debugOverlay = !state.debugOverlay;
+        toggleOverlay();
       }
     });
 

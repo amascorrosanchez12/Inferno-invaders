@@ -74,6 +74,14 @@
       gap: 12px;
       flex-wrap: wrap;
     }
+    .stats {
+      display: grid;
+      gap: 4px;
+      font-size: 12px;
+      opacity: 0.85;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
     .screen-row {
       display: flex;
       justify-content: center;
@@ -160,18 +168,21 @@
         <div class="screen-title">Inferno Invaders</div>
         <div class="screen-subtitle">A/D o ←/→ para moverte • Espacio para disparar</div>
         <div id="menu-high-score">High Score: 0</div>
+        <div id="menu-stats" class="stats">Runs: 0 · Kills: 0 · Best Level: 1</div>
         <div id="menu-music">Music: ON</div>
         <div id="menu-music-vol">Music Vol: MID</div>
+        <div id="menu-crt">CRT: OFF</div>
         <div class="screen-actions">
           <button id="play-button" type="button">Jugar</button>
           <button id="music-button" type="button">Music: ON/OFF</button>
+          <button id="crt-button" type="button">CRT: ON/OFF</button>
         </div>
         <div class="screen-row">
           <button id="music-vol-low" type="button">LOW</button>
           <button id="music-vol-mid" type="button">MID</button>
           <button id="music-vol-high" type="button">HIGH</button>
         </div>
-        <div class="screen-subtitle">Enter para iniciar</div>
+        <div id="menu-stats-reset" class="screen-subtitle">Enter para iniciar • X para reset stats</div>
       </div>
     </div>
     <div id="gameover-screen" class="screen hidden">
@@ -204,6 +215,13 @@
       level: 1,
       paused: false,
       debugOverlay: true,
+      crtEnabled: false,
+      statsNoticeTime: 0,
+      stats: {
+        runs: 0,
+        kills: 0,
+        bestLevel: 1,
+      },
       shakeTime: 0,
       backgroundPulse: 0,
       lastTime: 0,
@@ -274,18 +292,25 @@
     const menuButton = document.getElementById("menu-button");
     const restartButton = document.getElementById("restart-button");
     const menuHighScore = document.getElementById("menu-high-score");
+    const menuStats = document.getElementById("menu-stats");
     const menuMusic = document.getElementById("menu-music");
     const menuMusicVol = document.getElementById("menu-music-vol");
+    const menuCrt = document.getElementById("menu-crt");
     const gameoverHighScore = document.getElementById("gameover-high-score");
     const mobileControls = document.getElementById("mobile-controls");
     const musicVolLow = document.getElementById("music-vol-low");
     const musicVolMid = document.getElementById("music-vol-mid");
     const musicVolHigh = document.getElementById("music-vol-high");
+    const crtButton = document.getElementById("crt-button");
 
     // Persistent high score storage.
     const HIGH_SCORE_KEY = "infernoInvadersHighScore";
     const MUSIC_ON_KEY = "infernoInvadersMusicOn";
     const MUSIC_VOL_KEY = "infernoInvadersMusicVol";
+    const CRT_ON_KEY = "infernoInvadersCrtOn";
+    const RUNS_KEY = "infernoInvadersRuns";
+    const KILLS_KEY = "infernoInvadersKills";
+    const BEST_LEVEL_KEY = "infernoInvadersBestLevel";
 
     function loadMusicSettings() {
       const storedOn = localStorage.getItem(MUSIC_ON_KEY);
@@ -296,11 +321,31 @@
       if (Number.isFinite(storedVol)) {
         audio.musicVolume = storedVol;
       }
+      const storedCrt = localStorage.getItem(CRT_ON_KEY);
+      if (storedCrt !== null) {
+        state.crtEnabled = storedCrt === "true";
+      }
     }
 
     function saveMusicSettings() {
       localStorage.setItem(MUSIC_ON_KEY, String(audio.musicEnabled));
       localStorage.setItem(MUSIC_VOL_KEY, String(audio.musicVolume));
+      localStorage.setItem(CRT_ON_KEY, String(state.crtEnabled));
+    }
+
+    function loadStats() {
+      const runs = Number(localStorage.getItem(RUNS_KEY));
+      const kills = Number(localStorage.getItem(KILLS_KEY));
+      const bestLevel = Number(localStorage.getItem(BEST_LEVEL_KEY));
+      state.stats.runs = Number.isFinite(runs) ? runs : 0;
+      state.stats.kills = Number.isFinite(kills) ? kills : 0;
+      state.stats.bestLevel = Number.isFinite(bestLevel) ? bestLevel : 1;
+    }
+
+    function saveStats() {
+      localStorage.setItem(RUNS_KEY, String(state.stats.runs));
+      localStorage.setItem(KILLS_KEY, String(state.stats.kills));
+      localStorage.setItem(BEST_LEVEL_KEY, String(state.stats.bestLevel));
     }
 
     function loadHighScore() {
@@ -314,10 +359,15 @@
 
     function refreshMenu() {
       menuHighScore.textContent = `High Score: ${state.highScore}`;
+      menuStats.textContent = `Runs: ${state.stats.runs} · Kills: ${state.stats.kills} · Best Level: ${state.stats.bestLevel}`;
       menuMusic.textContent = `Music: ${audio.musicEnabled ? "ON" : "OFF"}`;
       musicButton.textContent = `Music: ${audio.musicEnabled ? "ON" : "OFF"}`;
       menuMusicVol.textContent = `Music Vol: ${audio.musicVolume <= 0.2 ? "LOW" : audio.musicVolume <= 0.45 ? "MID" : "HIGH"}`;
+      menuCrt.textContent = `CRT: ${state.crtEnabled ? "ON" : "OFF"}`;
       gameoverHighScore.textContent = `High Score: ${state.highScore}`;
+      const resetNote = state.statsNoticeTime > 0 ? "Stats reset" : "Enter para iniciar • X para reset stats";
+      const resetEl = document.getElementById("menu-stats-reset");
+      if (resetEl) resetEl.textContent = resetNote;
     }
 
     function setMobileControl(action, pressed) {
@@ -471,6 +521,12 @@
       refreshMenu();
     }
 
+    function toggleCrt() {
+      state.crtEnabled = !state.crtEnabled;
+      saveMusicSettings();
+      refreshMenu();
+    }
+
     function handleFirstInteraction() {
       // Initialize/resume AudioContext and start music once after user input.
       initAudio();
@@ -543,6 +599,9 @@
       handleFirstInteraction();
       // Audible test beep after user interaction to confirm volume.
       beep(880, 0.08, "triangle", 0.14);
+      state.stats.runs += 1;
+      saveStats();
+      refreshMenu();
     }
 
     function showGameOverMenu() {
@@ -552,6 +611,7 @@
     }
 
     loadMusicSettings();
+    loadStats();
     resetGame();
     loadHighScore();
     showMenu();
@@ -642,6 +702,11 @@
         state.gameOver = true;
         state.running = false;
         state.enemyShots = [];
+        if (state.level > state.stats.bestLevel) {
+          state.stats.bestLevel = state.level;
+          saveStats();
+          refreshMenu();
+        }
         showGameOverMenu();
       }
     }
@@ -709,6 +774,8 @@
             invader.alive = false;
             shot.y = -100;
             state.score += 50;
+            state.stats.kills += 1;
+            saveStats();
             spawnPowerUp(invader.x, invader.y);
             spawnParticles(invader.x, invader.y, "#f5b15f");
             beep(740, 0.06, "triangle", 0.04);
@@ -731,6 +798,11 @@
             beep(120, 0.15, "sawtooth", 0.08);
             if (state.lives <= 0) {
               state.running = false;
+              if (state.level > state.stats.bestLevel) {
+                state.stats.bestLevel = state.level;
+                saveStats();
+                refreshMenu();
+              }
               showGameOverMenu();
             }
           }
@@ -777,6 +849,11 @@
         invaderGrid.direction = 1;
         resetGrid();
         beep(880, 0.12, "triangle", 0.06);
+        if (state.level > state.stats.bestLevel) {
+          state.stats.bestLevel = state.level;
+          saveStats();
+          refreshMenu();
+        }
       }
     }
 
@@ -817,6 +894,12 @@
       }
     }
 
+    function updateStatsNotice(dt) {
+      if (state.statsNoticeTime > 0) {
+        state.statsNoticeTime = Math.max(0, state.statsNoticeTime - dt);
+      }
+    }
+
     function drawBackground(dt) {
       state.backgroundPulse += dt * 1.4;
       const glow = 0.12 + Math.sin(state.backgroundPulse) * 0.05;
@@ -838,6 +921,35 @@
         ctx.fillStyle = `rgba(255, 60, 60, ${0.04 + Math.random() * 0.03})`;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
+    }
+
+    function drawCrtOverlay() {
+      if (!state.crtEnabled) return;
+      ctx.save();
+      ctx.globalAlpha = 0.08;
+      // Soft scanlines.
+      ctx.fillStyle = "rgba(0, 0, 0, 0.25)";
+      for (let y = 0; y < canvas.height; y += 4) {
+        ctx.fillRect(0, y, canvas.width, 1);
+      }
+      // Light vignette without crushing sprites.
+      const vignette = ctx.createRadialGradient(
+        canvas.width / 2,
+        canvas.height / 2,
+        canvas.width * 0.1,
+        canvas.width / 2,
+        canvas.height / 2,
+        canvas.width * 0.75
+      );
+      vignette.addColorStop(0, "rgba(0,0,0,0)");
+      vignette.addColorStop(1, "rgba(0,0,0,0.18)");
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Gentle flicker tint.
+      ctx.globalAlpha = 0.06;
+      ctx.fillStyle = `rgba(255, 40, 40, ${0.06 + Math.random() * 0.03})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
     }
 
     function drawPlayer() {
@@ -963,6 +1075,9 @@
       if (audio.muted) {
         ctx.fillText("MUTE", canvas.width - 90, 100);
       }
+      if (state.statsNoticeTime > 0) {
+        ctx.fillText("Stats reset", canvas.width - 120, 120);
+      }
 
       if (!state.running && !state.inMenu) {
         ctx.fillStyle = "rgba(0,0,0,0.6)";
@@ -1003,6 +1118,11 @@
       ctx.fillText("PAUSA", canvas.width / 2 - 70, canvas.height / 2);
       ctx.font = "16px Trebuchet MS";
       ctx.fillText("Pulsa P para continuar", canvas.width / 2 - 100, canvas.height / 2 + 28);
+      ctx.fillText(
+        `CRT: ${state.crtEnabled ? "ON" : "OFF"} (C)`,
+        canvas.width / 2 - 70,
+        canvas.height / 2 + 50
+      );
     }
 
     function applyScreenShake(dt) {
@@ -1026,6 +1146,7 @@
         applyScreenShake(dt);
       }
 
+      updateStatsNotice(dt);
       if (state.running && !state.paused && !state.inMenu) {
         updatePlayer(dt);
         updateInvaders(dt);
@@ -1044,6 +1165,7 @@
       drawShots();
       drawPowerUps();
       drawParticles();
+      drawCrtOverlay();
       drawHUD();
       drawPauseOverlay();
 
@@ -1074,6 +1196,7 @@
     });
     menuButton.addEventListener("click", showMenu);
     musicButton.addEventListener("click", toggleMusic);
+    crtButton.addEventListener("click", toggleCrt);
 
     window.addEventListener("keydown", (event) => {
       if (state.inMenu && event.code === "Enter") {
@@ -1108,10 +1231,21 @@
           toggleMute();
         }
       }
+      if (event.code === "KeyC") {
+        toggleCrt();
+      }
       if (event.code === "KeyH") {
         state.highScore = 0;
         saveHighScore();
         state.highScoreNoticeTime = 1.5;
+        refreshMenu();
+      }
+      if (event.code === "KeyX" && (state.inMenu || !state.running)) {
+        state.stats.runs = 0;
+        state.stats.kills = 0;
+        state.stats.bestLevel = 1;
+        saveStats();
+        state.statsNoticeTime = 1.5;
         refreshMenu();
       }
       if (event.code === "KeyV") {

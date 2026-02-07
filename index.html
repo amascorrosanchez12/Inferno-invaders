@@ -335,6 +335,8 @@
       bossPatternTimer: 0,
       bossRainTimer: 0,
       bossShots: [],
+      bossHitFlash: 0,
+      bossLaserFired: false,
       statsNoticeTime: 0,
       langNoticeTime: 0,
       stats: {
@@ -901,6 +903,8 @@
       state.bossPatternTimer = 0;
       state.bossRainTimer = 0;
       state.bossShots = [];
+      state.bossHitFlash = 0;
+      state.bossLaserFired = false;
     }
 
     function updateBoss(dt) {
@@ -947,9 +951,14 @@
         if (state.bossLaser.warn > 0) {
           state.bossLaser.warn -= dt;
         } else {
+          if (!state.bossLaserFired) {
+            state.bossLaserFired = true;
+            state.shakeTime = Math.max(state.shakeTime, 0.16);
+          }
           state.bossLaser.fire -= dt;
           if (state.bossLaser.fire <= 0) {
             state.bossLaser = null;
+            state.bossLaserFired = false;
           }
         }
       }
@@ -971,6 +980,10 @@
         shot.y += shot.speed * dt;
       });
       state.bossShots = state.bossShots.filter((shot) => shot.y < canvas.height + 20);
+
+      if (state.bossHitFlash > 0) {
+        state.bossHitFlash = Math.max(0, state.bossHitFlash - dt);
+      }
     }
 
     function checkInvaderGroundCollision() {
@@ -1089,6 +1102,7 @@
           if (Math.hypot(dx, dy) < shot.radius + boss.size / 2) {
             shot.y = -100;
             boss.hp -= 4;
+            state.bossHitFlash = 0.08;
             beep(520, 0.05, "square", 0.09);
             if (boss.hp <= 0) {
               state.bossActive = false;
@@ -1397,6 +1411,14 @@
       ctx.textBaseline = "middle";
       ctx.font = "64px system-ui, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\"";
       ctx.fillText("😈", 0, 0);
+      // Brief flash when the boss is hit to make impacts feel heavier.
+      if (state.bossHitFlash > 0) {
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = "rgba(255, 220, 220, 0.8)";
+        ctx.beginPath();
+        ctx.arc(0, 0, boss.size * 0.55, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
     }
 
@@ -1581,7 +1603,7 @@
     function applyScreenShake(dt) {
       if (state.shakeTime > 0) {
         state.shakeTime -= dt;
-        const intensity = 6 * (state.shakeTime / 0.25);
+        const intensity = 4 * (state.shakeTime / 0.25);
         const offsetX = (Math.random() - 0.5) * intensity;
         const offsetY = (Math.random() - 0.5) * intensity;
         ctx.translate(offsetX, offsetY);

@@ -524,8 +524,14 @@
       }
       const storedCrt = localStorage.getItem(CRT_ON_KEY);
       state.crtEnabled = storedCrt === "true";
+      if (storedCrt === null) {
+        localStorage.setItem(CRT_ON_KEY, "false");
+      }
       const storedOverlay = localStorage.getItem(OVERLAY_ON_KEY);
       state.debugOverlay = storedOverlay === "true";
+      if (storedOverlay === null) {
+        localStorage.setItem(OVERLAY_ON_KEY, "false");
+      }
     }
 
     function saveMusicSettings() {
